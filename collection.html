@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Fee Collection - Fee Tracker</title>
-    <!-- Security: verified by auth-guard.js below -->
+    <!-- Security: Firebase onAuthStateChanged verifies staff/admin below -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     <link rel="apple-touch-icon" href="logo.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/shared.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -398,19 +397,11 @@
     <script type="module">
         import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { doc, onSnapshot, collection, getDocs, writeBatch, setDoc, query, where, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { db, auth, BASE_PATH }   from './js/firebase-config.js';
-        import { guardStaff }            from './js/auth-guard.js';
-        import { loadHeader, loadFooter, initHamburger, showToast, formatCurrency, formatDate } from './js/shared.js';
-        import { printReceipt, generateFeeStatusPDF } from './js/receipt-generator.js';
-
-        // 🔐 SECURITY: Firebase-verified staff/admin check
-        const authResult = await guardStaff();
-        if (!authResult) return;
+        import { db, auth, BASE_PATH } from './js/firebase-config.js';
 
         // --- GLOBAL STATE ---
-        let isCurrentAdmin = authResult.role === 'admin';
-        let currentUserEmail = authResult.user.email;
-        // BASE_PATH imported from firebase-config.js
+        let isCurrentAdmin = false; 
+        let currentUserEmail = '';
         let students = [], allPayments = [], classes = [], studentGroups = [], feeItems = [], allStaff = [];
         let defaultFee = 200, feeStatusTitle = '', defaultReceiptMandatory = false;
         let isEditMode = false, editingPaymentGroup = {}, selectedStudentId = null;
@@ -429,8 +420,33 @@
             });
         });
 
-        // --- UI TOGGLES (using shared.js) ---
-        const closeMenu = initHamburger();
+        // --- UI TOGGLES (Hamburger & Modals) ---
+        const mobileToggle = document.getElementById('mobile-menu-btn');
+        const toggleIcon = mobileToggle.querySelector('i');
+        const navMenu = document.querySelector('.nav-menu');
+
+        const closeMenu = () => {
+            navMenu.classList.remove('active'); 
+            toggleIcon.classList.remove('fa-times');
+            toggleIcon.classList.add('fa-bars');
+            toggleIcon.style.transform = 'rotate(0deg)';
+        };
+
+        mobileToggle.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            navMenu.classList.toggle('active'); 
+            if(navMenu.classList.contains('active')) {
+                toggleIcon.classList.remove('fa-bars');
+                toggleIcon.classList.add('fa-times');
+                toggleIcon.style.transform = 'rotate(90deg)';
+            } else {
+                closeMenu();
+            }
+        });
+
+        document.addEventListener('click', (e) => { 
+            if (!navMenu.contains(e.target) && !mobileToggle.contains(e.target)) closeMenu(); 
+        });
 
         document.getElementById('confirm-cancel').addEventListener('click', () => {
             document.getElementById('confirm-popup').classList.add('hidden');
@@ -1068,18 +1084,67 @@
             document.getElementById('student-profile-popup').classList.add('flex');
         };
 
-        // --- PDF DOWNLOAD (uses receipt-generator.js) ---
+        // --- PDF DOWNLOAD ---
         document.getElementById('fee-download-pdf-btn').addEventListener('click', () => {
             const fCls = document.getElementById('filter-class').value, fGen = document.getElementById('filter-gender').value;
-            const list = students.filter(s => (fCls==='all'||s.class===fCls) && (fGen==='all'||s.gender===fGen));
-            const label = [fCls !== 'all' ? fCls : '', fGen !== 'all' ? fGen : ''].filter(Boolean).join(' - ');
-            generateFeeStatusPDF(list, feeItems, allPayments, label || feeStatusTitle || 'All');
+            let list = students.filter(s => (fCls==='all'||s.class===fCls) && (fGen==='all'||s.gender===fGen));
+            const items = [...feeItems].filter(m => m.isVisible !== false), headers = ["Student", ...items.map(m => m.name)], body = [];
+            
+            Object.values(list.reduce((acc, s) => { 
+                const k=`${s.class}#${s.gender}`; 
+                if (!acc[k]) acc[k] = { class: s.class, gender: s.gender, students: [] }; 
+                acc[k].students.push(s); 
+                return acc; 
+            }, {}))
+            .sort((a,b) => {
+                const classCompare = a.class.localeCompare(b.class, undefined, {numeric: true});
+                if (classCompare !== 0) return classCompare;
+                if (a.gender === 'Male' && b.gender !== 'Male') return -1;
+                if (a.gender !== 'Male' && b.gender === 'Male') return 1;
+                return 0;
+            })
+            .forEach(g => {
+                body.push([{ content: `${g.class} - ${g.gender}`, colSpan: headers.length, styles: { fontStyle: 'bold', fillColor: '#e5e7eb', textColor: '#1f2937' } }]);
+                g.students.sort((a,b) => (a.adm||'').localeCompare(b.adm||'', undefined, {numeric: true})).forEach(s => {
+                    const row = [`${s.name} (${s.adm||'-'})`];
+                    items.forEach(i => { const p = allPayments.find(pay => pay.studentId === s.id && pay.itemKey === i.key); if(p) row.push({ content: i.type==='custom' ? `${p.amount.toFixed(0)}` : (p.receiptNo?`R:${p.receiptNo}`:'Y'), styles: { fillColor: '#ecfdf5', textColor: '#065f46', halign: 'center', fontStyle: 'bold' } }); else row.push({ content: '-', styles: { halign: 'center', textColor: '#9ca3af' } }); });
+                    body.push(row);
+                });
+            });
+            const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
+            doc.setFontSize(18); doc.text(feeStatusTitle || "Fee Status Report", 14, 15);
+            doc.autoTable({ head: [headers], body: body, startY: 20, theme: 'grid', styles: { fontSize: 8, cellPadding: 1.5, lineColor: '#d1d5db', lineWidth: 0.1 }, headStyles: { fillColor: '#f3f4f6', textColor: '#374151' } });
+            doc.save(`${feeStatusTitle || "Fee Status Report"}.pdf`);
         });
 
-        // --- INIT DATA LISTENERS ---
-        // Auth already verified by guardStaff() above.
+        // --- INIT LISTENER ---
         onAuthStateChanged(auth, async (user) => {
-            if (!user) return;
+            // 🔐 Must be a non-anonymous Firebase user (staff/admin logged in via index.html)
+            if (!user || user.isAnonymous) { window.location.href = 'index.html'; return; }
+            currentUserEmail = user.email;
+
+            // Check if this user is admin
+            try {
+                const adminSnap = await getDoc(doc(db, `${BASE_PATH}/settings`, 'adminAuth'));
+                if(adminSnap.exists() && adminSnap.data().email === currentUserEmail) {
+                    isCurrentAdmin = true;
+                    localStorage.setItem('admin_logged_in', 'true');
+                } else {
+                    isCurrentAdmin = false;
+                    localStorage.removeItem('admin_logged_in');
+                    // Verify this user is in staff collection (non-admin staff)
+                    const staffSnap = await getDocs(collection(db, `${BASE_PATH}/staff`));
+                    const myStaff = staffSnap.docs.find(d => d.data().email === currentUserEmail);
+                    if (!myStaff) {
+                        // Not admin, not in staff collection → redirect
+                        window.location.href = 'index.html';
+                        return;
+                    }
+                }
+            } catch(e) {
+                console.warn("Staff verify warning:", e.message);
+                // On Firestore error, Firebase auth being signed in is sufficient
+            }
 
             const displayEl = document.getElementById('staff-name-display');
             if (isCurrentAdmin) { displayEl.textContent = "ADMINISTRATOR"; }
@@ -1104,9 +1169,47 @@
                 if (docSnap.exists()) {
                     const d = docSnap.data();
                     
-                    // 🔄 Use shared.js header/footer loader (no more duplicate code)
-                    loadHeader(d);
-                    loadFooter(d);
+                    const appNameStr = d.appName || 'Fee Collection';
+                    document.getElementById('header-title').textContent = appNameStr;
+                    setTimeout(() => { fitText('header-title'); }, 50);
+
+                    const regEl = document.getElementById('header-regno');
+                    const placeEl = document.getElementById('header-place');
+                    const sepEl = document.getElementById('header-sep');
+                    const subContainer = document.getElementById('header-subtitle');
+                    
+                    regEl.textContent = d.regNo ? `Reg: ${d.regNo}` : '';
+                    placeEl.textContent = d.place || '';
+                    if(d.regNo || d.place) {
+                        subContainer.classList.remove('hidden');
+                        if(d.regNo && d.place) sepEl.classList.remove('hidden'); else sepEl.classList.add('hidden');
+                    } else { subContainer.classList.add('hidden'); }
+
+                    if(d.logoUrl) {
+                        document.getElementById('header-logo').src = d.logoUrl;
+                        document.getElementById('header-logo').style.opacity = '1';
+                    }
+
+                    document.getElementById('footer-inst-name').textContent = appNameStr;
+                    
+                    const fPhone = document.getElementById('footer-phone');
+                    const fPhoneLink = document.getElementById('footer-phone-link');
+                    if(fPhone) fPhone.textContent = d.contactPhone || 'Not Available';
+                    if(fPhoneLink && d.contactPhone) fPhoneLink.href = `tel:${d.contactPhone}`;
+
+                    const fEmail = document.getElementById('footer-email');
+                    const fEmailLink = document.getElementById('footer-email-link');
+                    if(fEmail) fEmail.textContent = d.contactEmail || 'Not Available';
+                    if(fEmailLink && d.contactEmail) fEmailLink.href = `mailto:${d.contactEmail}`;
+
+                    ['youtube','telegram','instagram','whatsapp','facebook'].forEach(k => {
+                        const el = document.getElementById(`link-${k}`);
+                        if(el) {
+                            const url = k === 'youtube' ? d.socialYouTube : d['social' + k.charAt(0).toUpperCase() + k.slice(1)];
+                            if(url) { el.href = url; el.classList.remove('hidden'); }
+                            else el.classList.add('hidden');
+                        }
+                    });
 
                     defaultFee = d.defaultFee || 200; 
                     feeStatusTitle = d.feeStatusTitle || ''; 
