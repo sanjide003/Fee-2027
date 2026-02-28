@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Admin Dashboard - Fee Tracker</title>
     
-    <!-- Security Check: handled by auth-guard.js (Firebase verified) -->
+    <!-- Security Check -->
+    <!-- Security: Firebase onAuthStateChanged verifies admin below -->
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#3b82f6">
@@ -575,16 +576,11 @@
         import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { doc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, where, writeBatch, getDocs, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { db, auth, BASE_PATH } from './js/firebase-config.js';
-        import { guardAdmin }           from './js/auth-guard.js';
-        import { showToast }            from './js/shared.js';
 
         if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW failed'))); }
 
-        // 🔐 SECURITY: Firebase-verified admin check (not localStorage)
-        const currentAdmin = await guardAdmin();
-        if (!currentAdmin) return; // guardAdmin() redirects if not authorized
-
         window.logoutAdmin = () => { signOut(auth).then(() => { localStorage.removeItem('admin_logged_in'); window.location.href = 'index.html'; }); };
+
         let students = [], classes = [], studentGroups = [], feeItems = [], allStaff = [];
         let webContent = { notices: [], gallery: [] };
         let editingStudentId = null, editingClassName = null, editingStaffId = null;
@@ -1155,8 +1151,25 @@
         }
 
         onAuthStateChanged(auth, async (user) => {
-            // Guarded by guardAdmin() above — this is just for data loading
-            if (!user) return;
+            // Not logged in → redirect
+            if (!user || user.isAnonymous) { window.location.href = 'index.html'; return; }
+
+            // 🔐 Verify admin via Firestore (not just localStorage)
+            try {
+                const adminSnap = await getDoc(doc(db, `${BASE_PATH}/settings`, 'adminAuth'));
+                if (!adminSnap.exists() || adminSnap.data().email !== user.email) {
+                    // Not admin — check if adminAuth doc exists at all (first-time setup)
+                    // If no adminAuth doc, allow first authenticated user (setup mode)
+                    if (adminSnap.exists()) {
+                        window.location.href = 'index.html';
+                        return;
+                    }
+                }
+            } catch(e) {
+                console.warn("Admin verify warning:", e.message);
+                // On Firestore error, fall back to Firebase auth being sufficient
+            }
+            localStorage.setItem('admin_logged_in', 'true');
 
             await setupDefaultAdmin(); 
             const configRef = doc(db, `${BASE_PATH}/settings`, 'config');
