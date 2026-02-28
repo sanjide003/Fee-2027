@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Student Dashboard - Fee Tracker</title>
+    
+    <!-- Security: verified by auth-guard.js below -->
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="apple-touch-icon" href="logo.png">
+
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/shared.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        :root { --primary: #0f172a; --accent: #3b82f6; --white: #ffffff; --text-dark: #1e293b; --text-gray: #64748b; --header-height: 70px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        html { scroll-behavior: smooth !important; }
+        
+        body { background-color: #f8fafc; color: var(--text-dark); overflow-x: hidden; display: flex; flex-direction: column; min-height: 100vh; }
+        
+        a { text-decoration: none; color: inherit; transition: 0.2s; }
+        ul { list-style: none; }
+        .hidden { display: none !important; }
+
+        /* Clean White Loading Screen (No Spinner) */
+        #loading-screen { position: fixed; inset: 0; background-color: #ffffff; z-index: 9999; transition: opacity 0.3s ease; }
+
+        /* Unified Header Matches Public Page */
+        header { 
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); position: sticky; top: 15px; z-index: 1000; 
+            border: 1px solid #f1f5f9; height: var(--header-height); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); 
+            border-radius: 16px; margin: 15px auto; width: calc(100% - 30px); max-width: 1200px;
+        }
+        @media (max-width: 768px) { header { margin: 10px; width: calc(100% - 20px); border-radius: 12px; top: 10px; } }
+        
+        .nav-container { height: 100%; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; position: relative; }
+        
+        .header-logo-box { width: 45px; height: 45px; flex-shrink: 0; z-index: 10; display: flex; align-items: center;}
+        .header-logo-box img { max-height: 100%; max-width: 100%; border-radius: 8px; object-fit: contain; opacity: 0; transition: opacity 0.5s ease; }
+        
+        .header-center-box { position: absolute; left: 50%; transform: translateX(-50%); width: 55%; text-align: center; display: flex; flex-direction: column; justify-content: center; z-index: 1; }
+        .header-center-box h1 { font-weight: 800; color: var(--primary); white-space: normal; line-height: 1.2; width: 100%; margin: 0 auto; font-size: 14px; word-wrap: break-word; }
+        .header-center-box p { font-size: 10px; color: var(--text-gray); font-weight: 600; white-space: nowrap; opacity: 0.8; margin-top: 2px; }
+        
+        /* Animated Hamburger Only Menu */
+        .mobile-toggle { display: block; color: var(--primary); cursor: pointer; padding: 5px 10px; z-index: 1001; position: relative; }
+        .menu-icon-wrapper { width: 24px; height: 24px; position: relative; display: flex; align-items: center; justify-content: center; }
+        .menu-icon-wrapper i { position: absolute; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 22px; }
+        .icon-bars { opacity: 1; transform: rotate(0deg) scale(1); }
+        .icon-close { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+        .active-toggle .icon-bars { opacity: 0; transform: rotate(90deg) scale(0.5); }
+        .active-toggle .icon-close { opacity: 1; transform: rotate(0deg) scale(1); color: #ef4444; }
+
+        .nav-menu { position: absolute; top: calc(100% + 15px); right: 0; width: 240px; background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(15px); flex-direction: column; align-items: stretch; padding: 15px; gap: 8px; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); transform: translateY(-15px) scale(0.95); opacity: 0; pointer-events: none; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease; transform-origin: top right; z-index: 900; display: flex; }
+        .nav-menu.active { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+        .nav-link { font-size: 14px; width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 15px; text-align: left; border-radius: 10px; font-weight: 600; color: var(--text-dark); transition: 0.2s; }
+        .nav-link:hover, .nav-link.active { background: #f8fafc; color: var(--accent); }
+        
+        .login-btn-nav { width: 100%; padding: 12px; background: #ef4444; color: var(--white); border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: transform 0.2s; border: none; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.2); display: flex; align-items: center; gap: 6px; justify-content: center; margin-top: 5px;}
+        .login-btn-nav:hover { transform: translateY(-2px); }
+
+        /* Main Content Area */
+        main { flex-grow: 1; padding: 20px 15px; max-width: 900px; margin: 0 auto; width: 100%; }
+        .content-card { background: #ffffff; border: 1px solid #f1f5f9; box-shadow: 0 4px 25px rgba(0,0,0,0.04); border-radius: 20px; padding: 25px;}
+        @media (max-width: 768px) { .content-card { padding: 15px; } }
+
+        /* Professional ID Card Profile */
+        .id-card { background: #ffffff; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.05); overflow: hidden; position: relative; border: 1px solid #e2e8f0; }
+        .id-card-header { background: linear-gradient(135deg, #1e3a8a, #3b82f6); padding: 30px 20px 50px; text-align: center; color: white; position: relative; }
+        .id-card-header::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: #ffffff; border-radius: 30px 30px 0 0; }
+        .id-avatar-wrapper { position: relative; width: 100px; height: 100px; margin: -40px auto 10px; z-index: 2; border-radius: 50%; padding: 4px; background: #ffffff; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        .id-avatar { width: 100%; height: 100%; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 800; color: #94a3b8; overflow: hidden;}
+        .id-name { text-align: center; font-size: 22px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+        .id-class { text-align: center; font-size: 14px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; }
+        
+        .id-details { padding: 0 25px 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 400px) { .id-details { padding: 0 15px 20px; gap: 10px; } }
+        .id-info-group { background: #f8fafc; padding: 12px 15px; border-radius: 12px; border: 1px solid #f1f5f9; }
+        .id-label { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 800; margin-bottom: 3px; letter-spacing: 0.5px; }
+        .id-value { font-size: 14px; color: #1e293b; font-weight: 700; font-family: 'Poppins', sans-serif;}
+
+        /* Fee Grid (Strictly 3 Cards Per Row) & Expand Logic */
+        .fee-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; align-items: start; }
+        
+        .fee-card { position: relative; overflow: hidden; border-radius: 12px; border: 2px solid; padding: 12px 4px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .fee-card.paid { border-color: #34d399; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.05); }
+        .fee-card.unpaid { border-color: #fca5a5; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.05); }
+        
+        .fee-status-badge { position: absolute; top: 0; left: 0; right: 0; padding: 3px; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: white; }
+        .fee-card.paid .fee-status-badge { background: #10b981; }
+        .fee-card.unpaid .fee-status-badge { background: #ef4444; }
+
+        .fee-month { font-size: 12px; font-weight: 800; color: #1e293b; margin-top: 15px; margin-bottom: 2px; line-height: 1.2; word-break: break-word;}
+        .fee-amt { font-size: 14px; font-weight: 800; font-family: 'Poppins', sans-serif; }
+        .fee-card.paid .fee-amt { color: #059669; }
+        .fee-card.unpaid .fee-amt { color: #dc2626; }
+
+        /* Expand Card Full Width Inline (No Popup) */
+        .fee-card.show-details { grid-column: 1 / -1; padding: 25px 20px; transform: scale(1.02); z-index: 5; box-shadow: 0 15px 30px rgba(0,0,0,0.1); border-radius: 16px;}
+        .fee-card.show-details .fee-month { font-size: 18px; margin-top: 20px; }
+        .fee-card.show-details .fee-amt { font-size: 24px; }
+        
+        /* Details Panel (Hidden by default, shown when expanded) */
+        .fee-details-panel { display: none; width: 100%; margin-top: 20px; border-top: 1px dashed #cbd5e1; padding-top: 20px; animation: fadeIn 0.4s ease; text-align: left;}
+        .fee-card.show-details .fee-details-panel { display: block; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .close-btn-expand { position: absolute; top: 12px; right: 15px; font-size: 20px; color: #94a3b8; cursor: pointer; display: none; }
+        .fee-card.show-details .close-btn-expand { display: block; }
+
+        .pay-now-btn { background: #2563eb; color: white; font-weight: 700; font-size: 15px; padding: 12px 20px; border-radius: 50px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); transition: 0.2s; margin-top: 10px;}
+        .pay-now-btn:hover { background: #1d4ed8; transform: translateY(-2px); }
+
+        /* Compact Footer */
+        .footer { width:100%; padding: 20px 15px 15px; text-align:center; margin-top: auto; background: #ffffff; border-top: 1px solid #e2e8f0; }
+        .follow-title { color:var(--primary); font-size:11px; letter-spacing:1px; font-weight:800; margin-bottom:10px; font-family: sans-serif; }
+        .socials { display:flex; justify-content:center; gap:8px; margin-bottom:15px; }
+        .socials a { width:32px; height:32px; background: #f8fafc; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-gray); font-size:14px; text-decoration:none; transition: 0.3s; border: 1px solid #e2e8f0;}
+        .socials a:hover { background: var(--accent); color: white; transform: translateY(-2px); border-color: var(--accent);}
+        .corporate { font-size:12px; color:var(--text-gray); margin-bottom:12px; display: flex; justify-content: center; gap: 10px; align-items: center; font-weight: 600; flex-wrap: wrap; }
+        .corporate a { text-decoration: none; color: inherit; display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; transition: background 0.2s; background: #f8fafc; border: 1px solid #e2e8f0;}
+        .corporate a:hover { background: #eff6ff; color: var(--accent); border-color: #bfdbfe;}
+        .corporate i { color: var(--accent); font-size: 12px;}
+        .divider { width:40px; height:3px; background:var(--accent); margin:0 auto 10px; border-radius: 2px;}
+        .copy { color:#64748b; font-size:10px; font-weight: 600; }
+        .powered { margin-top: 6px; font-size: 11px; font-weight: 700; color: #94a3b8; }
+        .powered a { color: #64748b; text-decoration: underline; text-underline-offset: 2px; transition: color 0.2s; }
+        .powered a:hover { color: var(--accent); }
+    </style>
+</head>
+<body>
+    <!-- Clean White Loading Screen -->
+    <div id="loading-screen"></div>
+
+    <!-- Unified Header Matches Public Page -->
+    <header>
+        <div class="nav-container">
+            <div class="header-logo-box">
+                <img id="header-logo" src="logo.png" alt="Logo" onerror="this.style.display='none'">
+            </div>
+            
+            <div class="header-center-box">
+                <h1 id="header-title">Student Dashboard</h1>
+                <p id="header-subtitle" class="hidden"><span id="header-regno"></span> <span id="header-sep" class="mx-1 hidden">|</span> <span id="header-place"></span></p>
+            </div>
+
+            <!-- Hamburger Toggle Icon -->
+            <div class="mobile-toggle" id="mobile-menu-btn">
+                <div class="menu-icon-wrapper">
+                    <i class="fas fa-bars icon-bars"></i>
+                    <i class="fas fa-times icon-close"></i>
+                </div>
+            </div>
+            
+            <ul class="nav-menu">
+                <li><a href="#home" class="nav-link tab-link active" data-target="home-page"><i class="fas fa-id-badge text-lg w-6"></i> My Profile</a></li>
+                <li><a href="#fees" class="nav-link tab-link" data-target="fees-page"><i class="fas fa-file-invoice-dollar text-lg w-6"></i> Fee Details</a></li>
+                <div class="border-t border-gray-100 my-1"></div>
+                <li><button onclick="logoutStudent()" class="login-btn-nav"><i class="fas fa-sign-out-alt"></i> Logout</button></li>
+            </ul>
+        </div>
+    </header>
+
+    <main>
+        <!-- 1. PROFILE TAB (ID CARD) -->
+        <section id="home-page" class="page-content">
+            <div class="id-card">
+                <div class="id-card-header">
+                    <h3 class="text-lg font-bold" id="id-school-name">Institution Name</h3>
+                    <p class="text-xs opacity-80" id="id-school-sub">Excellence in Education</p>
+                </div>
+                <div class="id-avatar-wrapper">
+                    <div class="id-avatar" id="dash-avatar"><i class="fas fa-user"></i></div>
+                </div>
+                <h2 class="id-name" id="dash-name">-</h2>
+                <div class="id-class" id="dash-class">Class: -</div>
+                
+                <div class="id-details">
+                    <div class="id-info-group"><div class="id-label">Adm No</div><div class="id-value" id="dash-adm">-</div></div>
+                    <div class="id-info-group"><div class="id-label">Gender</div><div class="id-value" id="dash-gender">-</div></div>
+                    <div class="id-info-group"><div class="id-label">UID / Roll No</div><div class="id-value" id="dash-uid">-</div></div>
+                    <div class="id-info-group"><div class="id-label">Father's Name</div><div class="id-value" id="dash-father">-</div></div>
+                    <div class="id-info-group"><div class="id-label">Contact</div><div class="id-value" id="dash-mobile">-</div></div>
+                    <!-- Dynamically Hidden/Shown Concession Box -->
+                    <div class="id-info-group hidden" id="dash-conc-group" style="background: #ecfdf5; border-color: #a7f3d0;"><div class="id-label" style="color: #047857;">Fee Concession</div><div class="id-value" style="color: #059669;" id="dash-conc"></div></div>
+                    <!-- Address Info -->
+                    <div class="id-info-group" style="grid-column: 1 / -1;"><div class="id-label">Address</div><div class="id-value" style="font-size: 12px;" id="dash-addr">-</div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. FEES TAB -->
+        <section id="fees-page" class="page-content hidden">
+            <div class="content-card">
+                <h2 class="text-xl font-bold mb-1 text-gray-800"><i class="fas fa-receipt text-accent mr-2"></i> Fee Details</h2>
+                <p class="text-xs text-gray-500 font-semibold mb-4">Click on a fee block to view full details.</p>
+                
+                <!-- Categorized Fee Grids Injected Here -->
+                <div id="fee-sections-container"></div>
+                
+                <!-- Summary Totals Block in One Line -->
+                <div id="fee-summary"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer exactly like public page -->
+    <footer class="footer">
+        <div class="follow-title">FOLLOW US</div>
+        <div class="socials">
+            <a href="#" id="link-youtube" target="_blank" class="hidden"><i class="fa-brands fa-youtube"></i></a>
+            <a href="#" id="link-telegram" target="_blank" class="hidden"><i class="fa-brands fa-telegram-plane"></i></a>
+            <a href="#" id="link-instagram" target="_blank" class="hidden"><i class="fa-brands fa-instagram"></i></a>
+            <a href="#" id="link-whatsapp" target="_blank" class="hidden"><i class="fa-brands fa-whatsapp"></i></a>
+            <a href="#" id="link-facebook" target="_blank" class="hidden"><i class="fa-brands fa-facebook-f"></i></a>
+        </div>
+        <div class="corporate">
+           <a href="#" id="footer-email-link"><i class="fas fa-envelope"></i> <span id="footer-email">Email</span></a>
+           <a href="#" id="footer-phone-link"><i class="fas fa-phone"></i> <span id="footer-phone">Phone</span></a>
+        </div>
+        <div class="divider"></div>
+        <div class="copy">© <span id="footer-inst-name">Institution Name</span>. All Rights Reserved.</div>
+        <div class="powered">Developed by <a href="https://www.instagram.com/muhammed_sanjide_p" target="_blank">HADI MAHIRI FAIZY</a></div>
+    </footer>
+
+    <script type="module">
+        import { initHamburger, initTabs, fitText } from './js/shared.js';
+        
+        // Hamburger & tabs — no more duplicate code
+        initTabs();
+
+        // Inline Accordion Expansion (No Popup)
+        window.toggleReceipt = (element) => {
+            const isShowing = element.classList.contains('show-details');
+            document.querySelectorAll('.fee-card.show-details').forEach(el => el.classList.remove('show-details'));
+            if (!isShowing) {
+                element.classList.add('show-details');
+                setTimeout(() => { element.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 150);
+            }
+        };
+
+        function logoutStudent() {
+            localStorage.removeItem('student_logged_in_id');
+            window.location.href = 'index.html';
+        }
+        window.logoutStudent = logoutStudent;
+    </script>
+
+    <!-- Firebase Integration -->
+    <script type="module">
+        import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { db, auth, BASE_PATH } from './js/firebase-config.js';
+        import { guardStudent }         from './js/auth-guard.js';
+        import { loadHeader, loadFooter } from './js/shared.js';
+
+        // BASE_PATH from firebase-config.js
+        // 🔐 Student verification via auth-guard
+        const studentId = await guardStudent();
+        if (!studentId) return;
+        let feeItems = [], allPayments = [], studentGroups = [];
+        let defaultFee = 200;
+
+        async function loadDashboardData() {
+            try {
+                onSnapshot(doc(db, `${BASE_PATH}/settings`, 'config'), snap => {
+                    const conf = snap.exists() ? snap.data() : {};
+                    
+                    // 🔄 shared.js handles header/footer — no duplication
+                    loadHeader(conf);
+                    loadFooter(conf);
+                    document.getElementById('id-school-name').textContent = conf.appName || 'Institution Name';
+                    document.getElementById('id-school-sub').textContent = conf.appSubtitle || 'Excellence in Education';
+                    defaultFee = conf.defaultFee || 200;
+                    feeItems = conf.feeItems || [];
+                });
+
+                const grpSnap = await getDocs(collection(db, `${BASE_PATH}/studentGroups`));
+                studentGroups = grpSnap.docs.map(d => ({id: d.id, ...d.data()}));
+
+                const stuSnap = await getDoc(doc(db, `${BASE_PATH}/students`, studentId));
+                if (!stuSnap.exists()) { alert("Student profile not found."); logoutStudent(); return; }
+                const st = stuSnap.data();
+                
+                document.getElementById('dash-name').textContent = st.name;
+                document.getElementById('dash-class').textContent = st.class;
+                document.getElementById('dash-adm').textContent = st.adm || '-';
+                document.getElementById('dash-uid').textContent = st.uid || '-';
+                document.getElementById('dash-gender').textContent = st.gender || '-';
+                document.getElementById('dash-father').textContent = st.father || '-';
+                document.getElementById('dash-mobile').textContent = st.mobile || '-';
+                document.getElementById('dash-addr').textContent = st.address || '-';
+                
+                if(st.name) document.getElementById('dash-avatar').textContent = st.name.charAt(0).toUpperCase();
+
+                let baseFee = defaultFee;
+                
+                // Concession Logic (Hide if empty or not available)
+                const concGroup = document.getElementById('dash-conc-group');
+                if(st.concessionFee !== undefined && st.concessionFee !== null && st.concessionFee !== "") {
+                    baseFee = st.concessionFee;
+                    document.getElementById('dash-conc').textContent = `₹${baseFee} / month`;
+                    concGroup.classList.remove('hidden');
+                } else {
+                    concGroup.classList.add('hidden');
+                    const group = studentGroups.find(g => g.memberIds.includes(studentId));
+                    if(group && group.fee > 0) baseFee = group.fee;
+                }
+
+                const paySnap = await getDocs(query(collection(db, `${BASE_PATH}/payments`), where('studentId', '==', studentId)));
+                allPayments = paySnap.docs.map(d=>d.data());
+
+                const visibleItems = feeItems.filter(i => {
+                    if(i.isVisible === false) return false;
+                    if(i.type === 'custom' && i.scope === 'specific' && i.targetClass !== st.class) return false;
+                    return true;
+                });
+
+                let totalPaidAmount = 0;
+                let totalDueAmount = 0;
+
+                // Function to generate individual fee card
+                const generateFeeCardHtml = (item) => {
+                    const pay = allPayments.find(p => p.itemKey === item.key);
+                    let amountToPay = baseFee;
+                    if(item.type === 'custom') {
+                        if(item.scope === 'global') amountToPay = item.amount || 0;
+                        else if(item.scope === 'class-wise' && item.classValues) amountToPay = item.classValues[st.class] || 0;
+                        else if(item.scope === 'specific') amountToPay = item.amount || 0;
+                    }
+
+                    if(pay) {
+                        totalPaidAmount += parseFloat(pay.amount) || 0;
+                        const dateStr = new Date(pay.paymentDate).toLocaleDateString('en-GB');
+                        const staffName = pay.collectedByName || pay.collectedBy || 'Admin';
+                        
+                        return `
+                            <div class="fee-card paid" onclick="toggleReceipt(this)">
+                                <i class="fas fa-times close-btn-expand" onclick="event.stopPropagation(); toggleReceipt(this.parentElement)"></i>
+                                <div class="fee-status-badge">PAID</div>
+                                <div class="fee-month">${item.name}</div>
+                                <div class="fee-amt">₹${pay.amount}</div>
+                                
+                                <div class="fee-details-panel">
+                                    <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                                        <span class="text-xs text-gray-500 font-bold uppercase tracking-wide">Receipt No</span>
+                                        <span class="text-sm font-bold font-mono bg-green-50 text-green-700 px-3 py-1 rounded border border-green-200">${pay.receiptNo || 'N/A'}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                                        <span class="text-xs text-gray-500 font-bold uppercase tracking-wide">Date Paid</span>
+                                        <span class="text-sm font-bold text-gray-800">${dateStr}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center pt-1">
+                                        <span class="text-xs text-gray-500 font-bold uppercase tracking-wide flex-shrink-0 mr-4">Collected By</span>
+                                        <span class="text-xs font-bold text-blue-600 text-right w-full whitespace-normal" style="word-break: break-word;">${staffName}</span>
+                                    </div>
+                                </div>
+                            </div>`;
+                    } else {
+                        totalDueAmount += parseFloat(amountToPay) || 0;
+                        // Basic UPI Intent without prefilled amount/account
+                        const upiLink = `upi://pay`;
+                        
+                        return `
+                            <div class="fee-card unpaid" onclick="toggleReceipt(this)">
+                                <i class="fas fa-times close-btn-expand" onclick="event.stopPropagation(); toggleReceipt(this.parentElement)"></i>
+                                <div class="fee-status-badge">NOT PAID</div>
+                                <div class="fee-month">${item.name}</div>
+                                <div class="fee-amt">₹${amountToPay}</div>
+                                
+                                <div class="fee-details-panel">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <span class="text-sm text-gray-600 font-bold">Total Amount Due</span>
+                                        <span class="text-xl font-bold text-red-600 font-mono">₹${amountToPay}</span>
+                                    </div>
+                                    <a href="${upiLink}" class="pay-now-btn" onclick="event.stopPropagation();">
+                                        <i class="fas fa-paper-plane"></i> Pay via UPI
+                                    </a>
+                                </div>
+                            </div>`;
+                    }
+                };
+
+                // Split fees into Monthly and Other Categories
+                const monthlyItems = visibleItems.filter(i => !i.type || i.type === 'month');
+                const otherItems = visibleItems.filter(i => i.type === 'custom');
+
+                let sectionsHtml = '';
+                
+                if(monthlyItems.length > 0) {
+                    sectionsHtml += `<h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2 mb-3 border-b border-gray-200 pb-1">Monthly Fees</h3>`;
+                    sectionsHtml += `<div class="fee-grid">` + monthlyItems.map(generateFeeCardHtml).join('') + `</div>`;
+                }
+                
+                if(otherItems.length > 0) {
+                    sectionsHtml += `<h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mt-6 mb-3 border-b border-gray-200 pb-1">Other Fees</h3>`;
+                    sectionsHtml += `<div class="fee-grid">` + otherItems.map(generateFeeCardHtml).join('') + `</div>`;
+                }
+
+                document.getElementById('fee-sections-container').innerHTML = sectionsHtml;
+
+                // Render Summary Totals Side-by-Side in English
+                document.getElementById('fee-summary').innerHTML = `
+                    <div class="mt-6 border-t border-gray-200 pt-5">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-green-50 border border-green-200 p-4 rounded-xl flex flex-col justify-center items-center shadow-sm">
+                                <span class="text-[11px] text-green-700 font-bold uppercase tracking-widest mb-1 text-center">Total Paid</span>
+                                <span class="text-xl font-bold font-mono text-green-700">₹${totalPaidAmount}</span>
+                            </div>
+                            <div class="bg-red-50 border border-red-200 p-4 rounded-xl flex flex-col justify-center items-center shadow-sm">
+                                <span class="text-[11px] text-red-700 font-bold uppercase tracking-widest mb-1 text-center">Total Due</span>
+                                <span class="text-xl font-bold font-mono text-red-700">₹${totalDueAmount}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Clean White Screen logic (Fade out instantly)
+                const loader = document.getElementById('loading-screen');
+                loader.style.opacity = '0';
+                setTimeout(() => { loader.style.display = 'none'; }, 300);
+
+            } catch (error) {
+                console.error("Error loading dashboard:", error);
+                alert("An error occurred. Please try again.");
+                logoutStudent();
+            }
+        }
+
+        onAuthStateChanged(auth, user => { if(user) { loadDashboardData(); } });
+        signInAnonymously(auth);
+    </script>
+</body>
+</html>

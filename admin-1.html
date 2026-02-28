@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Admin Dashboard - Fee Tracker</title>
+    
+    <!-- Security Check: handled by auth-guard.js (Firebase verified) -->
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <link rel="apple-touch-icon" href="logo.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        :root { --background-light: #f3f4f6; --text-light: #1f2937; --card-light: #ffffff; --border-light: #e5e7eb; --primary-light: #3b82f6; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--background-light); color: var(--text-light); }
+        .card { background-color: var(--card-light); border: 1px solid var(--border-light); }
+        .btn-primary { background-color: var(--primary-light); color: #ffffff; transition: 0.2s; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .popup-overlay { background-color: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); }
+        .mandatory-star { color: #ef4444; font-weight: bold; margin-left: 2px; }
+        
+        .sortable-ghost { opacity: 0.4; background: #f3f4f6; border: 2px dashed #9ca3af; }
+        .drag-handle { cursor: grab; color: #9ca3af; }
+        .drag-handle:active { cursor: grabbing; }
+        input, select, textarea { background-color: #ffffff; border-color: #d1d5db; color: #1f2937; transition: border 0.2s; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary-light); box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
+        .table-header { background-color: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        #side-drawer { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .drawer-link.active { background-color: #eff6ff; color: #2563eb; font-weight: 600; border-right: 4px solid #2563eb; }
+        .drawer-link { color: #4b5563; }
+        .drawer-link:hover { background-color: #f1f5f9; }
+        .drawer-heading { font-size: 0.75rem; text-transform: uppercase; font-weight: 800; color: #94a3b8; padding: 1.2rem 1rem 0.5rem 1rem; letter-spacing: 0.05em; }
+
+        .upload-area { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px; text-align: center; transition: 0.3s; background: #f8fafc; cursor: pointer; }
+        .upload-area:hover, .upload-area.dragover { border-color: var(--primary-light); background: #eff6ff; }
+        .progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 10px; display: none; }
+        .progress-fill { height: 100%; background: var(--primary-light); width: 0%; transition: width 0.3s; }
+        
+        /* Custom Toggle Switch */
+        .toggle-checkbox:checked { right: 0; border-color: #68D391; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+    <div id="app" class="min-h-screen pb-16">
+        
+        <div class="sticky top-0 z-30 card shadow-sm rounded-none border-b border-gray-200 bg-white">
+            <header class="container mx-auto px-4 py-3 relative flex justify-between items-center h-16">
+                <button id="hamburger-btn" class="p-2 -ml-2 rounded-lg text-gray-600 hover:bg-gray-100 transition focus:outline-none"><i class="fas fa-bars text-xl"></i></button>
+                <div class="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-3 w-max">
+                    <img src="logo.png" alt="Logo" class="w-8 h-8 rounded-md shadow-sm" onerror="this.style.display='none'">
+                    <div class="text-center sm:text-left"><h1 id="app-name-header" class="text-base sm:text-lg font-bold text-gray-900 leading-tight">Admin Dashboard</h1><p id="app-subtitle-header" class="text-[10px] sm:text-xs text-gray-500 font-medium hidden sm:block">Institute Management</p></div>
+                </div>
+                <div class="w-8"></div>
+            </header>
+        </div>
+
+        <div id="drawer-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-40 hidden opacity-0 transition-opacity duration-300"></div>
+        <aside id="side-drawer" class="fixed top-0 left-0 h-full w-64 bg-white shadow-2xl z-50 transform -translate-x-full flex flex-col">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50"><span class="font-bold text-lg text-gray-800">Main Menu</span><button id="close-drawer-btn" class="text-gray-500 hover:text-gray-800 p-1 rounded-md hover:bg-gray-200"><i class="fas fa-times text-xl"></i></button></div>
+            <nav class="flex-grow pb-4 space-y-1 overflow-y-auto">
+                <div class="drawer-heading">Institution</div>
+                <a href="#manage-staff" class="nav-link drawer-link flex items-center gap-3 p-3 transition active"><i class="fas fa-chalkboard-teacher w-5 text-center"></i><span class="text-sm">Staff Management</span></a>
+                
+                <div class="drawer-heading">Student Management</div>
+                <a href="#add-students" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-user-plus w-5 text-center"></i><span class="text-sm">Add Students</span></a>
+                <a href="#manage-students" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-users-cog w-5 text-center"></i><span class="text-sm">Manage Students</span></a>
+                <a href="#manage-classes" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-chalkboard text-center w-5"></i><span class="text-sm">Classes & Divisions</span></a>
+                <a href="#manage-groups" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-layer-group w-5 text-center"></i><span class="text-sm">Student Groups</span></a>
+                <a href="#fee-concessions" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-hand-holding-usd w-5 text-center"></i><span class="text-sm">Fee Concessions</span></a>
+                
+                <div class="drawer-heading">Finance</div>
+                <a href="collection.html" target="_blank" class="w-full flex items-center gap-3 p-3 transition text-green-600 bg-green-50 hover:bg-green-100 border-l-4 border-transparent hover:border-green-600">
+                    <i class="fas fa-cash-register w-5 text-center"></i><span class="text-sm font-bold">Open Cashier Panel</span>
+                </a>
+                <a href="#fee-settings" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-receipt w-5 text-center"></i><span class="text-sm">Fee Settings</span></a>
+
+                <div class="drawer-heading">Website Management</div>
+                <a href="#web-basic-info" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-globe w-5 text-center"></i><span class="text-sm">Basic Info</span></a>
+                <a href="#web-notices" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-bell w-5 text-center"></i><span class="text-sm">Notifications</span></a>
+                <a href="#web-gallery" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-images w-5 text-center"></i><span class="text-sm">Gallery</span></a>
+
+                <div class="drawer-heading">System</div>
+                <a href="#security-settings" class="nav-link drawer-link flex items-center gap-3 p-3 transition"><i class="fas fa-shield-alt w-5 text-center"></i><span class="text-sm">Security Settings</span></a>
+            </nav>
+            <div class="p-4 border-t border-gray-100 bg-gray-50 flex flex-col gap-2">
+                <button onclick="logoutAdmin()" class="flex items-center justify-center gap-2 w-full p-2.5 bg-red-100 text-red-700 rounded-lg font-bold hover:bg-red-200 transition"><i class="fas fa-sign-out-alt"></i><span class="text-sm">Admin Logout</span></button>
+            </div>
+        </aside>
+
+        <main class="container mx-auto p-4 max-w-5xl mt-2">
+            
+            <!-- 1. Staff Management -->
+            <section id="manage-staff-page" class="page">
+                <div class="card p-5 rounded-xl shadow-sm mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Add New Staff</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div class="md:col-span-1"><label class="block text-sm font-semibold mb-1">1. Type <span class="mandatory-star">*</span></label><select id="st-type" class="w-full p-2.5 border rounded-lg"><option value="Teacher">Teacher</option><option value="Management">Management</option></select></div>
+                        <div class="md:col-span-2"><label class="block text-sm font-semibold mb-1">2. Full Name <span class="mandatory-star">*</span></label><input type="text" id="st-name" class="w-full p-2.5 border rounded-lg" placeholder="e.g. John Doe"></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div><label class="block text-sm font-semibold mb-1">3. Role/Subject <span class="mandatory-star">*</span></label><input type="text" id="st-role" class="w-full p-2.5 border rounded-lg" placeholder="e.g. Principal / Maths Teacher"></div>
+                        <div><label class="block text-sm font-semibold mb-1">4. Phone</label><input type="text" id="st-phone" class="w-full p-2.5 border rounded-lg" placeholder="Contact number"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 gap-4 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <div>
+                            <p class="text-sm font-bold text-blue-800 mb-1"><i class="fas fa-envelope"></i> 5. Login Email (For Cashier Auth)</p>
+                            <p class="text-xs text-blue-600 mb-2">Create this email in Firebase Auth first. Used for secure login.</p>
+                            <input type="email" id="st-email" class="w-full p-2.5 border rounded-lg" placeholder="staff@institute.com">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div><label class="block text-sm font-semibold mb-1">6. MSR Number</label><input type="text" id="st-msr" class="w-full p-2.5 border rounded-lg" placeholder="(For Teachers)"></div>
+                        <div><label class="block text-sm font-semibold mb-1">7. Photo URL</label><input type="text" id="st-photo" class="w-full p-2.5 border rounded-lg" placeholder="https://..."></div>
+                    </div>
+                    <div class="mb-4"><label class="block text-sm font-semibold mb-1">8. Address</label><textarea id="st-address" rows="2" class="w-full p-2.5 border rounded-lg" placeholder="Full address..."></textarea></div>
+                    <div class="mb-5 flex items-center gap-2">
+                        <label class="text-sm font-semibold">9. Account Status:</label>
+                        <input type="checkbox" id="st-active" class="w-4 h-4 rounded text-blue-600" checked> <span class="text-sm font-medium text-gray-600">Active (Can Login)</span>
+                    </div>
+
+                    <div class="text-right border-t pt-4"><button id="add-staff-btn" class="btn-primary font-bold py-2.5 px-6 rounded-lg shadow-md w-full sm:w-auto"><i class="fas fa-plus mr-2"></i> Add Staff</button></div>
+                </div>
+                <div class="card p-5 rounded-xl shadow-sm mb-6"><h2 class="text-xl font-bold mb-4 text-blue-800 border-b border-blue-100 pb-2"><i class="fas fa-chalkboard-teacher mr-2"></i>Active Teachers</h2><div id="active-teachers-list" class="space-y-3"></div></div>
+                <div class="card p-5 rounded-xl shadow-sm mb-6"><h2 class="text-xl font-bold mb-4 text-purple-800 border-b border-purple-100 pb-2"><i class="fas fa-user-tie mr-2"></i>Active Management</h2><div id="active-mgmt-list" class="space-y-3"></div></div>
+                <details class="bg-white border rounded-xl shadow-sm overflow-hidden mb-10">
+                    <summary class="p-4 font-bold text-gray-700 cursor-pointer bg-gray-50 hover:bg-gray-100 transition outline-none"><i class="fas fa-user-slash mr-2"></i> View Inactive Staff</summary>
+                    <div class="p-4 border-t bg-gray-50/50" id="inactive-staff-container">
+                        <!-- Rendered by JS split into Teachers and Management -->
+                    </div>
+                </details>
+            </section>
+
+            <!-- 2. Add Students -->
+            <section id="add-students-page" class="page hidden">
+                 <div class="card p-5 rounded-xl shadow-sm mb-6">
+                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Add Student (Manual Entry)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">1. Class <span class="mandatory-star">*</span></label><input type="text" id="add-stu-class" class="w-full p-2.5 border rounded-lg" placeholder="e.g. 10 A"></div>
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">2. ID/UID</label><input type="text" id="add-stu-uid" class="w-full p-2.5 border rounded-lg" placeholder="Unique ID"></div>
+                        
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">3. Student Name <span class="mandatory-star">*</span></label><input type="text" id="add-stu-name" class="w-full p-2.5 border rounded-lg" placeholder="Full Name (Will auto capitalize)"></div>
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">4. Father's Name</label><input type="text" id="add-stu-father" class="w-full p-2.5 border rounded-lg" placeholder="Father's Name"></div>
+                        
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">5. Gender <span class="mandatory-star">*</span></label><select id="add-stu-gender" class="w-full p-2.5 border rounded-lg"><option value="Male">Male</option><option value="Female">Female</option></select></div>
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">6. Mobile (Used for Login)</label><input type="tel" id="add-stu-mobile" class="w-full p-2.5 border rounded-lg" placeholder="Phone Number"></div>
+                        
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">7. Adm. No.</label><input type="text" id="add-stu-adm" class="w-full p-2.5 border rounded-lg" placeholder="Admission Number"></div>
+                        <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">8. Permanent Address</label><textarea id="add-stu-address" rows="1" class="w-full p-2.5 border rounded-lg" placeholder="Address"></textarea></div>
+                    </div>
+                     <div class="text-right border-t pt-4"><button id="add-manual-btn" class="btn-primary font-bold py-2.5 px-8 rounded-lg shadow-md w-full sm:w-auto"><i class="fas fa-save mr-2"></i> Save Student</button></div>
+                </div>
+
+                <div class="card p-5 rounded-xl shadow-sm border-blue-200 bg-blue-50/30">
+                    <div class="flex justify-between items-center mb-4 border-b border-blue-200 pb-2">
+                        <h2 class="text-xl font-bold text-blue-900"><i class="fas fa-file-excel text-green-600 mr-2"></i>Bulk Upload (CSV/Excel)</h2>
+                        <button onclick="downloadCSVTemplate()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-bold shadow-sm flex items-center gap-2"><i class="fas fa-download text-blue-600"></i> Download CSV Template</button>
+                    </div>
+                    
+                    <p class="text-sm text-gray-600 mb-4">നിങ്ങളുടെ എക്സൽ ഫയലിൽ <b>Name, Gender, Class</b> എന്നീ കോളങ്ങൾ നിർബന്ധമാണ്. (സ്മാൾ ലെറ്റർ അടിച്ചാലും സിസ്റ്റം ഓട്ടോമാറ്റിക് ആയി ക്യാപിറ്റൽ ആക്കിക്കൊള്ളും).</p>
+                    <div class="upload-area" id="excel-drop-zone"><input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" class="hidden"><i class="fas fa-cloud-upload-alt text-4xl text-blue-400 mb-3"></i><p class="font-semibold text-gray-700">Click to select or drag and drop CSV/Excel file here</p></div>
+                    <div id="excel-preview-area" class="mt-4 hidden p-4 bg-white border rounded-lg shadow-sm"><div class="flex justify-between items-center mb-2"><span class="font-bold text-gray-800" id="excel-file-name">filename.csv</span><span class="text-sm font-semibold bg-green-100 text-green-700 px-3 py-1 rounded-full" id="excel-record-count">Found 0 records</span></div><div class="progress-bar" id="upload-progress-bar"><div class="progress-fill" id="upload-progress-fill"></div></div><p class="text-xs text-center mt-2 text-gray-500 font-mono" id="upload-status-text"></p><div class="mt-4 text-right"><button id="cancel-upload-btn" class="px-4 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg mr-2">Cancel</button><button id="start-upload-btn" class="btn-primary px-6 py-2 font-bold rounded-lg"><i class="fas fa-upload mr-2"></i>Start Upload</button></div></div>
+                </div>
+            </section>
+
+            <!-- 3. Manage Students -->
+            <section id="manage-students-page" class="page hidden">
+                <div class="card p-5 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-bold mb-5 text-gray-800 border-b pb-2">Manage Students</h2>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-5">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Filter by Class</label><select id="filter-manage-class" class="w-full p-2.5 border rounded-lg bg-white"><option value="">-- Select Class --</option></select></div>
+                            <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Filter by Gender</label><select id="filter-manage-gender" class="w-full p-2.5 border rounded-lg bg-white"><option value="all">All Genders</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+                            <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Quick Search</label><div class="relative"><input type="text" id="search-student-input" placeholder="Search name or adm no..." class="w-full p-2.5 pl-9 border rounded-lg bg-white"><i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i></div></div>
+                        </div>
+                    </div>
+
+                    <div id="student-list-empty-state" class="text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                        <i class="fas fa-filter text-4xl text-gray-300 mb-3"></i>
+                        <p class="text-gray-500 font-medium">Please select a Class to view students.</p>
+                    </div>
+
+                    <div id="student-list-container" class="overflow-x-auto rounded-lg border border-gray-200 hidden"></div>
+                </div>
+            </section>
+            
+            <!-- 4. Manage Classes (Merge & Divide) -->
+            <section id="manage-classes-page" class="page hidden space-y-6">
+                <div class="card p-5 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Active Classes & Divisions</h2>
+                    <div id="class-list-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+                </div>
+                
+                <div class="card p-5 rounded-xl shadow-sm bg-blue-50/30 border-blue-200">
+                    <h2 class="text-xl font-bold mb-4 text-blue-900 border-b border-blue-200 pb-2"><i class="fas fa-random mr-2"></i>Divide / Merge Classes</h2>
+                    <div class="mb-3">
+                        <label class="block text-sm font-semibold mb-1 text-gray-800">Select Source Class</label>
+                        <select id="move-from-class" class="w-full md:w-1/2 p-2.5 border rounded-lg bg-white"><option value="">-- Select --</option></select>
+                    </div>
+                    <div id="move-student-list-container" class="mt-2 space-y-2 max-h-60 overflow-y-auto border border-gray-300 rounded-lg p-3 hidden bg-white shadow-inner"></div>
+                    
+                    <div id="move-target-container" class="mt-4 hidden p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+                        <label class="block text-sm font-bold text-gray-800 mb-3">Move Selected Students To:</label>
+                        <div class="flex gap-6 mb-3">
+                            <label class="flex items-center gap-2 cursor-pointer font-medium text-sm"><input type="radio" name="move_dest_type" value="existing" checked class="w-4 h-4 text-blue-600"> Existing Class</label>
+                            <label class="flex items-center gap-2 cursor-pointer font-medium text-sm"><input type="radio" name="move_dest_type" value="new" class="w-4 h-4 text-blue-600"> New Class</label>
+                        </div>
+                        <select id="move-target-sel" class="w-full p-2.5 border rounded-lg bg-gray-50"></select>
+                        <input type="text" id="move-target-inp" class="w-full p-2.5 border rounded-lg bg-gray-50 hidden" placeholder="Enter new class name (e.g. 10 B)">
+                        
+                        <div class="text-right mt-4 pt-3 border-t">
+                            <button id="move-selected-students-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Move Students</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 5. Student Groups -->
+            <section id="manage-groups-page" class="page hidden space-y-6">
+                <div class="card p-5 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-bold mb-3 text-gray-800 border-b pb-2">Create Student Group</h2>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-semibold mb-1">Number of Students to Group</label><input type="number" id="num-of-students-group" min="2" class="w-full p-2.5 border rounded-lg shadow-sm" placeholder="e.g. 2"></div>
+                            <div><label class="block text-sm font-semibold mb-1 text-blue-700">Group Monthly Fee (₹) <span class="text-xs font-normal text-gray-500">(Optional)</span></label><input type="number" id="group-monthly-fee" class="w-full p-2.5 border border-blue-300 rounded-lg shadow-sm bg-blue-50 font-bold" placeholder="e.g. 800"></div>
+                        </div>
+                        <div id="group-creation-container" class="space-y-4"></div>
+                        <div id="create-group-btn-container" class="text-right hidden border-t pt-4"><button id="create-group-btn" class="btn-primary font-bold py-2.5 px-8 rounded-lg shadow-md">Create Group</button></div>
+                    </div>
+                </div>
+                <div class="card p-5 rounded-xl shadow-sm"><h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Existing Groups</h2><div id="student-groups-list" class="space-y-3"></div></div>
+            </section>
+
+            <!-- 6. Fee Concessions -->
+            <section id="fee-concessions-page" class="page hidden space-y-6">
+                <div class="card p-5 rounded-xl shadow-sm">
+                    <div class="flex justify-between items-center mb-5 border-b pb-2">
+                        <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-hand-holding-usd text-green-600 mr-2"></i>Fee Concessions</h2>
+                    </div>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-5">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div><label class="block text-xs font-bold text-gray-500 uppercase">Filter Class</label><select id="filter-conc-class" class="w-full p-2 border rounded bg-white mt-1"><option value="">-- Select --</option></select></div>
+                            <div><label class="block text-xs font-bold text-gray-500 uppercase">Search Student</label><input type="text" id="search-conc-input" placeholder="Name or Adm No..." class="w-full p-2 border rounded bg-white mt-1"></div>
+                        </div>
+                    </div>
+
+                    <div id="conc-list-empty" class="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-500">Select a class or search to find students.</div>
+                    <div id="conc-list-container" class="space-y-2 hidden"></div>
+                </div>
+
+                <div class="card p-5 rounded-xl shadow-sm border-green-200 bg-green-50/20">
+                    <h3 class="font-bold text-green-800 mb-3 border-b border-green-200 pb-2">Active Concessions (All Classes)</h3>
+                    <div id="active-concessions-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
+                </div>
+            </section>
+            
+            <!-- 7. Fee Settings -->
+            <section id="fee-settings-page" class="page hidden space-y-6">
+                <div class="card p-5 rounded-xl shadow-sm bg-blue-50/30 border-blue-100">
+                    <h2 class="text-xl font-bold mb-3 text-blue-900 border-b border-blue-200 pb-2"><i class="fas fa-cog mr-2"></i> Default Configuration</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
+                        <div><label class="block text-sm font-semibold mb-1">School Default Monthly Fee (₹)</label><input type="number" id="default-fee-input" class="w-full p-2.5 border rounded-lg shadow-sm font-bold text-blue-700 bg-white"></div>
+                        <div><label class="block text-sm font-semibold mb-1">Fee Status Title (For PDF Report)</label><input type="text" id="fee-status-title-input" class="w-full p-2.5 border rounded-lg shadow-sm bg-white"></div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between bg-white p-4 rounded-lg border shadow-sm mb-4">
+                        <div>
+                            <p class="text-sm font-bold text-gray-800">Is Receipt Number Mandatory for Default Fee?</p>
+                            <p class="text-xs text-gray-500 mt-1">If enabled, cashier cannot save regular monthly fee without entering a receipt number.</p>
+                        </div>
+                        <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in ml-4">
+                            <input type="checkbox" id="default-fee-receipt-req" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                            <label for="default-fee-receipt-req" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+
+                    <div class="text-right"><button id="save-fee-config-btn" class="btn-primary font-bold py-2.5 px-8 rounded-lg shadow-md"><i class="fas fa-save mr-2"></i> Save Config</button></div>
+                </div>
+
+                <div class="card p-5 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2"><i class="fas fa-plus-circle mr-2 text-green-600"></i> Advanced Fee Builder</h2>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div><label class="block text-sm font-semibold mb-1">Fee Item Name *</label><input type="text" id="adv-fee-name" class="w-full p-2.5 border rounded-lg" placeholder="e.g. Admission Fee, Exam Fee"></div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1">Fee Scope (കാറ്റഗറി) *</label>
+                                <select id="adv-fee-scope" class="w-full p-2.5 border rounded-lg font-medium text-blue-700">
+                                    <option value="global">Option A: Global (Same for all classes)</option>
+                                    <option value="class-wise">Option B: Class-wise (Different for each class)</option>
+                                    <option value="specific">Option C: Specific Class Only</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Scope Containers -->
+                        <div id="scope-global-container" class="mb-4 bg-white p-3 rounded border">
+                            <label class="block text-sm font-semibold mb-1">Global Amount (₹)</label>
+                            <input type="number" id="adv-fee-global-amt" class="w-full sm:w-1/2 p-2 border rounded-lg" placeholder="Amount for everyone">
+                        </div>
+
+                        <div id="scope-class-wise-container" class="mb-4 bg-white p-3 rounded border hidden">
+                            <label class="block text-sm font-semibold mb-2">Set Amount for each class:</label>
+                            <div id="class-wise-inputs" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+                        </div>
+
+                        <div id="scope-specific-container" class="mb-4 bg-white p-3 rounded border hidden">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label class="block text-sm font-semibold mb-1">Select Target Class</label><select id="adv-fee-specific-class" class="w-full p-2 border rounded-lg"></select></div>
+                                <div><label class="block text-sm font-semibold mb-1">Amount (₹)</label><input type="number" id="adv-fee-specific-amt" class="w-full p-2 border rounded-lg" placeholder="Amount"></div>
+                            </div>
+                        </div>
+
+                        <!-- Receipt Mandatory Toggle for Custom Fee -->
+                        <div class="flex items-center justify-between bg-white p-3 rounded border mb-4">
+                            <div>
+                                <p class="text-sm font-bold text-gray-800">Is Receipt Number Mandatory?</p>
+                                <p class="text-xs text-gray-500 mt-1">If Yes, cashier must enter receipt number when collecting this specific fee.</p>
+                            </div>
+                            <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in ml-4">
+                                <input type="checkbox" id="adv-fee-receipt-req" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                <label for="adv-fee-receipt-req" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                        </div>
+
+                        <div class="text-right border-t pt-3"><button id="add-adv-fee-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md"><i class="fas fa-save mr-2"></i> Create Fee Item</button></div>
+                    </div>
+
+                    <h3 class="font-bold text-gray-800 mb-3 border-b pb-2"><i class="fas fa-list-ul mr-2 text-gray-500"></i> Active Fee Items</h3>
+                    <div id="fee-items-management-container" class="space-y-3"></div>
+                </div>
+            </section>
+            
+            <!-- 8. Website Basic Info (Grouped) -->
+            <section id="web-basic-info-page" class="page hidden space-y-6">
+                <div class="card p-5 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2"><i class="fas fa-globe mr-2 text-gray-500"></i> Website & App Info</h2>
+                    
+                    <!-- Application Info -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-bold text-blue-800 mb-3"><i class="fas fa-info-circle mr-2"></i>Application Details</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-semibold mb-1">App / Institution Name</label><input type="text" id="app-name-input" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1">App Subtitle</label><input type="text" id="app-subtitle-input" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1">Register Number</label><input type="text" id="web-regno" class="w-full p-2.5 border rounded-lg bg-gray-50" placeholder="e.g. Reg: 12345"></div>
+                            <div><label class="block text-sm font-semibold mb-1">Logo URL</label><input type="text" id="web-logo" class="w-full p-2.5 border rounded-lg bg-gray-50" placeholder="https://..."></div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Details -->
+                    <div class="mb-6 border-t pt-4 border-gray-100">
+                        <h3 class="text-lg font-bold text-green-800 mb-3"><i class="fas fa-address-book mr-2"></i>Contact Details</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div><label class="block text-sm font-semibold mb-1">Place / Location</label><input type="text" id="web-place" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1">Contact Phone</label><input type="text" id="web-phone" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1">Contact Email</label><input type="email" id="web-email" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                        </div>
+                    </div>
+
+                    <!-- Social Media Links -->
+                    <div class="mb-6 border-t pt-4 border-gray-100">
+                        <h3 class="text-lg font-bold text-purple-800 mb-3"><i class="fas fa-hashtag mr-2"></i>Social Media Links</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-semibold mb-1"><i class="fab fa-whatsapp text-green-500 mr-1"></i> WhatsApp URL</label><input type="text" id="web-wa" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1"><i class="fab fa-facebook text-blue-600 mr-1"></i> Facebook URL</label><input type="text" id="web-fb" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1"><i class="fab fa-instagram text-pink-600 mr-1"></i> Instagram URL</label><input type="text" id="web-ig" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1"><i class="fab fa-youtube text-red-600 mr-1"></i> YouTube URL</label><input type="text" id="web-yt" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                            <div><label class="block text-sm font-semibold mb-1"><i class="fab fa-telegram text-blue-400 mr-1"></i> Telegram URL</label><input type="text" id="web-tg" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                        </div>
+                    </div>
+
+                    <!-- About -->
+                    <div class="border-t pt-4 border-gray-100">
+                        <h3 class="text-lg font-bold text-gray-800 mb-3"><i class="fas fa-file-alt mr-2"></i>About Us Description</h3>
+                        <textarea id="web-about" rows="4" class="w-full p-2.5 border rounded-lg bg-gray-50"></textarea>
+                    </div>
+
+                    <div class="mt-6 text-right pt-4 border-t"><button id="save-web-info-btn" class="btn-primary font-bold py-3 px-8 rounded-xl shadow-md"><i class="fas fa-save mr-2"></i> Save All Basic Info</button></div>
+                </div>
+            </section>
+            
+            <!-- 9. Web Notices -->
+            <section id="web-notices-page" class="page hidden"><div class="card p-5 rounded-xl shadow-sm bg-blue-50/20 border-blue-100"><h2 class="text-xl font-bold mb-4 text-blue-900 border-b border-blue-200 pb-2"><i class="fas fa-bell mr-2"></i> Notice Board</h2><div class="flex flex-col sm:flex-row gap-3 mb-6 bg-white p-4 rounded-lg shadow-sm border"><input type="text" id="new-notice-txt" class="flex-grow p-2.5 border rounded-lg" placeholder="Enter Notice Details..."><input type="date" id="new-notice-dt" class="w-full sm:w-40 p-2.5 border rounded-lg"><button id="add-notice-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg shadow">Publish</button></div><div id="web-notices-list" class="space-y-3"></div></div></section>
+            
+            <!-- 10. Web Gallery -->
+            <section id="web-gallery-page" class="page hidden"><div class="card p-5 rounded-xl shadow-sm"><h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2"><i class="fas fa-images mr-2 text-gray-500"></i> Gallery Management</h2><div class="flex flex-col sm:flex-row gap-3 mb-6"><input type="text" id="new-gal-url" class="flex-grow p-2.5 border rounded-lg shadow-sm" placeholder="Paste Image URL here (e.g. https://...)"><button id="add-gal-btn" class="btn-primary font-bold px-8 py-2.5 rounded-lg shadow-md">Add Photo</button></div><div id="web-gallery-list" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div></div></section>
+
+            <!-- 11. Security Settings -->
+            <section id="security-settings-page" class="page hidden">
+                <div class="card p-5 rounded-xl shadow-sm bg-red-50/30 border-red-100">
+                    <h2 class="text-xl font-bold mb-5 text-red-800 border-b border-red-200 pb-2"><i class="fas fa-user-shield mr-2"></i> Admin Security</h2>
+                    <p class="text-sm text-gray-600 mb-4">Set the Master Admin Email here. Only this email can access the Admin Panel (Authentication is handled securely by Firebase).</p>
+                    <div class="grid grid-cols-1 gap-5">
+                        <div><label class="block text-sm font-semibold mb-1 text-gray-800">Master Admin Email</label><input type="email" id="admin-email-input" class="w-full p-2.5 border rounded-lg shadow-sm font-bold" placeholder="admin@institute.com"></div>
+                    </div>
+                    <div class="mt-6 text-right"><button id="save-admin-auth-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition">Update Email</button></div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Edit Staff Modal (Full 9 Fields) -->
+    <div id="edit-staff-popup" class="fixed inset-0 popup-overlay items-center justify-center hidden z-50 px-4">
+        <div class="card rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-auto bg-white max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4 text-gray-900 border-b pb-2">Edit Staff Details</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="md:col-span-1"><label class="block text-sm font-semibold mb-1">1. Type <span class="mandatory-star">*</span></label><select id="e-st-type" class="w-full p-2.5 border rounded-lg bg-gray-50"><option value="Teacher">Teacher</option><option value="Management">Management</option></select></div>
+                <div class="md:col-span-2"><label class="block text-sm font-semibold mb-1">2. Full Name <span class="mandatory-star">*</span></label><input type="text" id="e-st-name" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label class="block text-sm font-semibold mb-1">3. Role/Subject <span class="mandatory-star">*</span></label><input type="text" id="e-st-role" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div><label class="block text-sm font-semibold mb-1">4. Phone</label><input type="text" id="e-st-phone" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 mb-4 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                <div><label class="block text-sm font-semibold mb-1 text-blue-900">5. Login Email</label><input type="email" id="e-st-email" class="w-full p-2.5 border rounded-lg"></div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label class="block text-sm font-semibold mb-1">6. MSR Number</label><input type="text" id="e-st-msr" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div><label class="block text-sm font-semibold mb-1">7. Photo URL</label><input type="text" id="e-st-photo" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+            </div>
+            <div class="mb-4"><label class="block text-sm font-semibold mb-1">8. Address</label><textarea id="e-st-addr" rows="2" class="w-full p-2.5 border rounded-lg bg-gray-50"></textarea></div>
+            <div class="mb-4 flex items-center gap-2">
+                <label class="text-sm font-semibold">9. Account Status:</label>
+                <input type="checkbox" id="e-st-active" class="w-4 h-4 rounded text-blue-600"> <span class="text-sm font-medium text-gray-600">Active</span>
+            </div>
+            <div class="flex justify-end gap-3 pt-4 border-t mt-4"><button id="edit-staff-cancel" class="px-5 py-2.5 bg-gray-200 font-bold rounded-lg hover:bg-gray-300">Cancel</button><button id="edit-staff-update" class="btn-primary px-6 py-2.5 rounded-lg font-bold shadow-md">Update Staff</button></div>
+        </div>
+    </div>
+
+    <!-- Edit Student Modal -->
+    <div id="edit-student-popup" class="fixed inset-0 popup-overlay items-center justify-center hidden z-50 px-4">
+        <div class="card rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-auto bg-white max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4 text-gray-900 border-b pb-2">Edit Student Information</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">Class <span class="mandatory-star">*</span></label><input type="text" id="e-stu-class" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">ID/UID</label><input type="text" id="e-stu-uid" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">Student Name <span class="mandatory-star">*</span></label><input type="text" id="e-stu-name" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">Father's Name</label><input type="text" id="e-stu-fat" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">Gender <span class="mandatory-star">*</span></label><select id="e-stu-gender" class="w-full p-2.5 border rounded-lg bg-gray-50"><option value="Male">Male</option><option value="Female">Female</option></select></div>
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">Mobile</label><input type="tel" id="e-stu-mob" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">Adm. No.</label><input type="text" id="e-stu-adm" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div class="col-span-1 lg:col-span-2"><label class="block text-sm font-semibold mb-1">Address</label><textarea id="e-stu-addr" rows="1" class="w-full p-2.5 border rounded-lg bg-gray-50"></textarea></div>
+            </div>
+            <div class="flex justify-end gap-3 pt-4 border-t mt-2"><button id="edit-student-cancel" class="px-5 py-2.5 bg-gray-200 text-gray-800 font-bold rounded-lg hover:bg-gray-300">Cancel</button><button id="edit-student-update" class="btn-primary px-6 py-2.5 rounded-lg font-bold shadow-md">Update Save</button></div>
+        </div>
+    </div>
+    
+    <!-- Edit Class Modal -->
+    <div id="edit-class-popup" class="fixed inset-0 popup-overlay items-center justify-center hidden z-50 px-4">
+        <div class="card rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-auto bg-white">
+            <h3 class="text-xl font-bold mb-4 text-gray-900 border-b pb-2">Rename Class</h3>
+            <div class="space-y-4"><div><label class="block text-sm font-semibold mb-1">New Class Name</label><input type="text" id="edit-class-name" class="w-full p-2.5 border rounded-lg focus:ring-2"></div></div>
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t"><button id="edit-class-cancel" class="px-5 py-2.5 bg-gray-200 text-gray-800 font-bold rounded-lg hover:bg-gray-300">Cancel</button><button id="edit-class-update" class="btn-primary px-6 py-2.5 rounded-lg font-bold shadow-md">Rename</button></div>
+        </div>
+    </div>
+
+    <!-- Edit Group Modal -->
+    <div id="edit-group-popup" class="fixed inset-0 popup-overlay items-center justify-center hidden z-50 px-4">
+        <div class="card rounded-2xl shadow-2xl p-6 w-full max-w-md mx-auto bg-white">
+            <h3 class="text-xl font-bold mb-4 text-gray-900 border-b pb-2">Edit Group</h3>
+            <input type="hidden" id="e-grp-id">
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-1 text-blue-700">Group Monthly Fee (₹)</label>
+                <input type="number" id="e-grp-fee" class="w-full p-2.5 border border-blue-300 rounded-lg bg-blue-50 font-bold">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-2">Members (Check to remove):</label>
+                <div id="e-grp-members" class="space-y-2 max-h-40 overflow-y-auto border p-2 rounded bg-gray-50"></div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t">
+                <button id="edit-group-cancel" class="px-5 py-2.5 bg-gray-200 text-gray-800 font-bold rounded-lg hover:bg-gray-300">Cancel</button>
+                <button id="edit-group-update" class="btn-primary px-6 py-2.5 rounded-lg font-bold shadow-md">Update Group</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Concession Modal -->
+    <div id="concession-popup" class="fixed inset-0 popup-overlay items-center justify-center hidden z-50 px-4">
+        <div class="card rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-auto bg-white">
+            <h3 class="text-xl font-bold mb-2 text-gray-900 border-b pb-2">Set Fee Concession</h3>
+            <p id="conc-student-name" class="font-bold text-blue-700 mb-4"></p>
+            <input type="hidden" id="conc-student-id">
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-1 text-green-700">Special Monthly Fee (₹)</label>
+                <p class="text-xs text-gray-500 mb-2">This overrides Default and Group fees for this student.</p>
+                <input type="number" id="conc-fee-amount" class="w-full p-2.5 border border-green-300 rounded-lg bg-green-50 font-bold text-lg" placeholder="Amount (e.g. 300)">
+            </div>
+            <div class="flex justify-end gap-3 pt-4 border-t">
+                <button id="conc-cancel" class="px-4 py-2 bg-gray-200 font-bold rounded-lg">Cancel</button>
+                <button id="conc-remove" class="px-4 py-2 bg-red-100 text-red-700 font-bold rounded-lg hidden">Remove</button>
+                <button id="conc-save" class="bg-green-600 text-white px-6 py-2 rounded-lg font-bold shadow-md">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Advanced Fee Modal -->
+    <div id="edit-fee-popup" class="fixed inset-0 popup-overlay items-center justify-center hidden z-[60] px-4">
+        <div class="card rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-auto bg-white max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4 text-gray-900 border-b pb-2">Edit Fee Item</h3>
+            <input type="hidden" id="e-fee-key">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div><label class="block text-sm font-semibold mb-1">Fee Item Name</label><input type="text" id="e-fee-name" class="w-full p-2.5 border rounded-lg bg-gray-50"></div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Fee Scope</label>
+                    <select id="e-fee-scope" class="w-full p-2.5 border rounded-lg font-medium text-blue-700 bg-gray-50">
+                        <option value="global">Global (Same for all classes)</option>
+                        <option value="class-wise">Class-wise (Different for each)</option>
+                        <option value="specific">Specific Class Only</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="e-scope-global-container" class="mb-4 bg-gray-50 p-3 rounded border">
+                <label class="block text-sm font-semibold mb-1">Global Amount (₹)</label>
+                <input type="number" id="e-fee-global-amt" class="w-full sm:w-1/2 p-2 border rounded-lg">
+            </div>
+
+            <div id="e-scope-class-wise-container" class="mb-4 bg-gray-50 p-3 rounded border hidden">
+                <label class="block text-sm font-semibold mb-2">Class-wise Amounts:</label>
+                <div id="e-class-wise-inputs" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+            </div>
+
+            <div id="e-scope-specific-container" class="mb-4 bg-gray-50 p-3 rounded border hidden">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-semibold mb-1">Target Class</label><select id="e-fee-specific-class" class="w-full p-2 border rounded-lg"></select></div>
+                    <div><label class="block text-sm font-semibold mb-1">Amount (₹)</label><input type="number" id="e-fee-specific-amt" class="w-full p-2 border rounded-lg"></div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between bg-gray-50 p-3 rounded border mb-4">
+                <div>
+                    <p class="text-sm font-bold text-gray-800">Is Receipt Number Mandatory?</p>
+                </div>
+                <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in ml-4">
+                    <input type="checkbox" id="e-fee-receipt-req" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                    <label for="e-fee-receipt-req" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4 border-t"><button id="e-fee-cancel" class="px-5 py-2.5 bg-gray-200 rounded-lg font-bold">Cancel</button><button id="e-fee-update" class="btn-primary px-6 py-2.5 rounded-lg font-bold shadow-md">Update Fee Item</button></div>
+        </div>
+    </div>
+
+    <!-- Edit Notice Modal -->
+    <div id="edit-notice-popup" class="fixed inset-0 popup-overlay items-center justify-center hidden z-50 px-4">
+        <div class="card rounded-2xl shadow-2xl p-6 w-full max-w-md mx-auto bg-white">
+            <h3 class="text-xl font-bold mb-4 text-gray-900 border-b pb-2">Edit Notice</h3>
+            <input type="hidden" id="e-not-idx">
+            <input type="text" id="e-not-txt" class="w-full p-2.5 border rounded-lg mb-3 bg-gray-50">
+            <input type="date" id="e-not-dt" class="w-full p-2.5 border rounded-lg mb-4 bg-gray-50">
+            <div class="flex justify-end gap-3"><button id="e-not-cancel" class="px-4 py-2 bg-gray-200 rounded-lg font-bold">Cancel</button><button id="e-not-save" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">Update</button></div>
+        </div>
+    </div>
+
+
+    <!-- Scripts -->
+    <script type="module">
+        import { signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { doc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, where, writeBatch, getDocs, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { db, auth, BASE_PATH } from './js/firebase-config.js';
+        import { guardAdmin }           from './js/auth-guard.js';
+        import { showToast }            from './js/shared.js';
+
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW failed'))); }
+
+        // 🔐 SECURITY: Firebase-verified admin check (not localStorage)
+        const currentAdmin = await guardAdmin();
+        if (!currentAdmin) return; // guardAdmin() redirects if not authorized
+
+        window.logoutAdmin = () => { signOut(auth).then(() => { localStorage.removeItem('admin_logged_in'); window.location.href = 'index.html'; }); };
+        let students = [], classes = [], studentGroups = [], feeItems = [], allStaff = [];
+        let webContent = { notices: [], gallery: [] };
+        let editingStudentId = null, editingClassName = null, editingStaffId = null;
+
+        // --- DRAWER ---
+        const drawer = document.getElementById('side-drawer'), overlay = document.getElementById('drawer-overlay');
+        const toggleDrawer = (open) => {
+            if(open) { overlay.classList.remove('hidden'); setTimeout(()=>overlay.classList.remove('opacity-0'), 10); drawer.classList.remove('-translate-x-full'); }
+            else { overlay.classList.add('opacity-0'); drawer.classList.add('-translate-x-full'); setTimeout(()=>overlay.classList.add('hidden'), 300); }
+        };
+        document.getElementById('hamburger-btn').addEventListener('click', () => toggleDrawer(true));
+        document.getElementById('close-drawer-btn').addEventListener('click', () => toggleDrawer(false));
+        overlay.addEventListener('click', () => toggleDrawer(false));
+
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                if(e.currentTarget.hasAttribute('target')) { window.open(e.currentTarget.href, '_blank'); return; }
+                document.querySelectorAll('.nav-link').forEach(l => { l.classList.remove('active'); });
+                e.currentTarget.classList.add('active'); 
+                document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+                const targetId = e.currentTarget.getAttribute('href').substring(1);
+                document.getElementById(targetId + '-page').classList.remove('hidden');
+                
+                if(targetId === 'manage-students') { populateClassDropdowns(); renderStudentList(); }
+                if(targetId === 'manage-classes') populateClassDropdowns();
+                if(targetId === 'manage-groups') renderStudentGroups();
+                if(targetId === 'manage-staff') renderStaffList();
+                if(targetId === 'fee-settings') renderFeeItemsManagement();
+                if(targetId === 'fee-concessions') { populateClassDropdowns(); renderConcessionsList(); }
+                
+                toggleDrawer(false);
+            });
+        });
+
+        // --- 1. STAFF MANAGEMENT ---
+        document.getElementById('add-staff-btn').addEventListener('click', async () => {
+            const type = document.getElementById('st-type').value, name = document.getElementById('st-name').value.trim(), role = document.getElementById('st-role').value.trim();
+            if(!type || !name || !role) return alert("Type, Name and Role are mandatory!");
+            const btn = document.getElementById('add-staff-btn'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            
+            await addDoc(collection(db, `${BASE_PATH}/staff`), { 
+                type, name, role, phone: document.getElementById('st-phone').value.trim(), email: document.getElementById('st-email').value.trim(), 
+                msr: document.getElementById('st-msr').value.trim(), address: document.getElementById('st-address').value.trim(), 
+                photo: document.getElementById('st-photo').value.trim(), isActive: document.getElementById('st-active').checked 
+            });
+            alert("Staff Added Successfully!"); 
+            ['st-name', 'st-role', 'st-phone', 'st-email', 'st-msr', 'st-address', 'st-photo'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('st-active').checked = true;
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus mr-2"></i> Add Staff';
+        });
+
+        const renderStaffList = () => {
+            const actTCont = document.getElementById('active-teachers-list'), actMCont = document.getElementById('active-mgmt-list'), inactCont = document.getElementById('inactive-staff-container');
+            const active = allStaff.filter(s => s.isActive), inactive = allStaff.filter(s => !s.isActive);
+
+            const buildHTML = (list, isAct) => list.map(s => `
+                <div class="flex flex-col sm:flex-row justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm items-start sm:items-center gap-4 transition hover:shadow-md mb-2">
+                    <div class="flex gap-4 items-center w-full sm:w-auto">
+                        <img src="${s.photo||'https://via.placeholder.com/60'}" class="w-14 h-14 rounded-full object-cover border-2 ${s.type==='Teacher'?'border-blue-200':'border-purple-200'}">
+                        <div>
+                            <b class="text-gray-900 text-lg">${s.name}</b>
+                            <div class="text-sm text-gray-500 font-medium mt-0.5"><i class="fas fa-briefcase text-gray-400 mr-1"></i> ${s.role}</div>
+                            ${s.email ? `<div class="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded mt-1 inline-block font-mono">Email: ${s.email}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                        <button class="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold flex-1 hover:bg-blue-100 transition" onclick="openEditStaff('${s.id}')"><i class="fas fa-edit"></i> Edit</button>
+                        ${isAct ? `<button class="px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-bold flex-1 hover:bg-amber-100 transition" onclick="toggleStaffStatus('${s.id}', false)"><i class="fas fa-ban"></i> Deactivate</button>` 
+                                : `<button class="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-bold flex-1 hover:bg-green-100 transition" onclick="toggleStaffStatus('${s.id}', true)"><i class="fas fa-check-circle"></i> Activate</button>`}
+                        <button class="px-4 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-bold flex-1 hover:bg-red-100 transition" onclick="deleteStaff('${s.id}')"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+
+            actTCont.innerHTML = active.filter(s=>s.type==='Teacher').length ? buildHTML(active.filter(s=>s.type==='Teacher'), true) : '<p class="text-sm text-gray-500 italic p-2">No active teachers found.</p>';
+            actMCont.innerHTML = active.filter(s=>s.type==='Management').length ? buildHTML(active.filter(s=>s.type==='Management'), true) : '<p class="text-sm text-gray-500 italic p-2">No active management found.</p>';
+            
+            // Separated Inactive Staff
+            const inactT = inactive.filter(s=>s.type==='Teacher'), inactM = inactive.filter(s=>s.type==='Management');
+            inactCont.innerHTML = `
+                <h4 class="font-bold text-gray-700 mb-2 border-b pb-1">Inactive Teachers</h4>
+                <div class="mb-4">${inactT.length ? buildHTML(inactT, false) : '<p class="text-sm text-gray-500 italic">No inactive teachers.</p>'}</div>
+                <h4 class="font-bold text-gray-700 mb-2 border-b pb-1">Inactive Management</h4>
+                <div>${inactM.length ? buildHTML(inactM, false) : '<p class="text-sm text-gray-500 italic">No inactive management.</p>'}</div>
+            `;
+        };
+
+        window.toggleStaffStatus = async (id, status) => { await updateDoc(doc(db, `${BASE_PATH}/staff`, id), { isActive: status }); };
+        window.deleteStaff = async (id) => { if(confirm("Permanently delete this staff member? This cannot be undone.")) await deleteDoc(doc(db, `${BASE_PATH}/staff`, id)); };
+        
+        window.openEditStaff = (id) => {
+            const s = allStaff.find(st => st.id === id); if(!s) return;
+            editingStaffId = s.id; 
+            document.getElementById('e-st-type').value = s.type||'Teacher'; document.getElementById('e-st-name').value = s.name||''; 
+            document.getElementById('e-st-role').value = s.role||''; document.getElementById('e-st-phone').value = s.phone||''; 
+            document.getElementById('e-st-email').value = s.email||''; document.getElementById('e-st-msr').value = s.msr||'';
+            document.getElementById('e-st-photo').value = s.photo||''; document.getElementById('e-st-addr').value = s.address||'';
+            document.getElementById('e-st-active').checked = s.isActive;
+            document.getElementById('edit-staff-popup').classList.remove('hidden'); document.getElementById('edit-staff-popup').classList.add('flex');
+        };
+        document.getElementById('edit-staff-cancel').onclick = () => document.getElementById('edit-staff-popup').classList.add('hidden');
+        document.getElementById('edit-staff-update').onclick = async () => {
+            const type = document.getElementById('e-st-type').value, name = document.getElementById('e-st-name').value.trim(), role = document.getElementById('e-st-role').value.trim();
+            if(!type || !name || !role) return alert("Type, Name and Role are mandatory!");
+            await updateDoc(doc(db, `${BASE_PATH}/staff`, editingStaffId), { 
+                type, name, role, email: document.getElementById('e-st-email').value.trim(), phone: document.getElementById('e-st-phone').value.trim(), 
+                msr: document.getElementById('e-st-msr').value.trim(), photo: document.getElementById('e-st-photo').value.trim(), 
+                address: document.getElementById('e-st-addr').value.trim(), isActive: document.getElementById('e-st-active').checked
+            });
+            document.getElementById('edit-staff-popup').classList.add('hidden');
+        };
+
+        // --- 2. ADD STUDENTS (CSV & UpperCase Logic) ---
+        window.downloadCSVTemplate = () => {
+            const csvData = "Class,ID_UID,Name,Father_Name,Gender,Mobile,Adm_No,Permanent_Address\n";
+            const blob = new Blob([csvData], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.setAttribute('hidden', ''); a.setAttribute('href', url); a.setAttribute('download', 'student_upload_template.csv');
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        };
+
+        const dropZone = document.getElementById('excel-drop-zone'), fileInput = document.getElementById('excel-file-input');
+        let excelParsedData = [];
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); if(e.dataTransfer.files.length) handleExcelFile(e.dataTransfer.files[0]); });
+        fileInput.addEventListener('change', (e) => { if(e.target.files.length) handleExcelFile(e.target.files[0]); });
+
+        function handleExcelFile(file) {
+            document.getElementById('excel-file-name').textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result), workbook = XLSX.read(data, {type: 'array'});
+                    const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval: ""});
+                    if(rawData.length === 0) return alert("File is empty.");
+                    
+                    excelParsedData = rawData.map(row => {
+                        const getVal = (kws) => { const k = Object.keys(row).find(k => kws.some(kw => k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(kw))); return k ? row[k].toString().trim() : ""; };
+                        const rawName = getVal(['name', 'student']);
+                        const rawClass = getVal(['class', 'grade']) || document.getElementById('excel-default-class').value.trim();
+                        return {
+                            name: rawName ? rawName.toUpperCase().trim() : "", 
+                            class: rawClass ? rawClass.toUpperCase().trim() : "",
+                            gender: getVal(['gender', 'sex']).toLowerCase().startsWith('f') ? 'Female' : 'Male',
+                            uid: getVal(['id', 'uid']), father: getVal(['father', 'parent']),
+                            mobile: getVal(['mobile', 'phone']), adm: getVal(['adm']), address: getVal(['address', 'permanent'])
+                        };
+                    }).filter(s => s.name && s.class); 
+
+                    document.getElementById('excel-record-count').textContent = `Found ${excelParsedData.length} valid records`;
+                    document.getElementById('excel-drop-zone').classList.add('hidden'); document.getElementById('excel-preview-area').classList.remove('hidden');
+                    document.getElementById('upload-progress-bar').style.display = 'none'; document.getElementById('upload-status-text').textContent = "Ready to upload";
+                } catch(err) { console.error(err); alert("Error reading file."); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        document.getElementById('cancel-upload-btn').addEventListener('click', () => { fileInput.value = ''; excelParsedData = []; document.getElementById('excel-drop-zone').classList.remove('hidden'); document.getElementById('excel-preview-area').classList.add('hidden'); });
+        document.getElementById('start-upload-btn').addEventListener('click', async () => {
+            if(excelParsedData.length === 0) return;
+            const btn = document.getElementById('start-upload-btn'), bar = document.getElementById('upload-progress-bar'), fill = document.getElementById('upload-progress-fill'), status = document.getElementById('upload-status-text');
+            btn.disabled = true; document.getElementById('cancel-upload-btn').disabled = true; bar.style.display = 'block';
+            let successCount = 0;
+            for(let i=0; i<excelParsedData.length; i+=100) {
+                const chunk = excelParsedData.slice(i, i+100); const batch = writeBatch(db);
+                chunk.forEach(s => { batch.set(doc(collection(db, `${BASE_PATH}/students`)), s); });
+                await batch.commit(); successCount += chunk.length; fill.style.width = `${(successCount/excelParsedData.length)*100}%`; status.textContent = `Uploading ${successCount} / ${excelParsedData.length} ...`;
+            }
+            status.innerHTML = `<span class="text-green-600 font-bold">✔ Successfully uploaded ${successCount} students!</span>`;
+            setTimeout(() => { document.getElementById('cancel-upload-btn').click(); btn.disabled=false; document.getElementById('cancel-upload-btn').disabled=false; }, 2000);
+        });
+
+        // Manual Add Student
+        document.getElementById('add-manual-btn').addEventListener('click', async () => {
+            const cls = document.getElementById('add-stu-class').value.toUpperCase().trim(), name = document.getElementById('add-stu-name').value.toUpperCase().trim(), gender = document.getElementById('add-stu-gender').value;
+            if(!cls || !name || !gender) return alert("Class, Name and Gender are mandatory.");
+            document.getElementById('add-manual-btn').disabled = true;
+            await addDoc(collection(db, `${BASE_PATH}/students`), { class: cls, name: name, gender: gender, uid: document.getElementById('add-stu-uid').value.trim(), adm: document.getElementById('add-stu-adm').value.toUpperCase().trim(), mobile: document.getElementById('add-stu-mobile').value.trim(), father: document.getElementById('add-stu-father').value.toUpperCase().trim(), address: document.getElementById('add-stu-address').value.trim() });
+            alert("Student Added!"); ['add-stu-class','add-stu-uid','add-stu-name','add-stu-father','add-stu-mobile','add-stu-adm','add-stu-address'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('add-manual-btn').disabled = false;
+        });
+
+        // --- 3. MANAGE STUDENTS ---
+        const populateClassDropdowns = () => {
+            classes = [...new Set(students.map(s => s.class))].sort((a,b) => a.localeCompare(b, undefined, {numeric: true}));
+            const opts = classes.map(c => `<option value="${c}">${c}</option>`).join('');
+            
+            const filterManage = document.getElementById('filter-manage-class');
+            const prevManageVal = filterManage.value;
+            filterManage.innerHTML = `<option value="">-- Select Class --</option>` + opts;
+            if(classes.includes(prevManageVal)) filterManage.value = prevManageVal;
+
+            const filterConc = document.getElementById('filter-conc-class');
+            const prevConcVal = filterConc.value;
+            filterConc.innerHTML = `<option value="">-- Select Class --</option>` + opts;
+            if(classes.includes(prevConcVal)) filterConc.value = prevConcVal;
+        };
+
+        const renderStudentList = () => {
+            const fCls = document.getElementById('filter-manage-class').value;
+            const fGen = document.getElementById('filter-manage-gender').value;
+            const sTerm = document.getElementById('search-student-input').value.toLowerCase();
+            const cont = document.getElementById('student-list-container');
+            const emptyState = document.getElementById('student-list-empty-state');
+
+            if (!fCls && !sTerm) { 
+                emptyState.classList.remove('hidden'); cont.classList.add('hidden'); return;
+            }
+            emptyState.classList.add('hidden'); cont.classList.remove('hidden');
+
+            const fil = students.filter(s => {
+                let match = true;
+                if(fCls) match = match && s.class === fCls;
+                if(fGen !== 'all') match = match && s.gender === fGen;
+                if(sTerm) match = match && (s.name.toLowerCase().includes(sTerm) || (s.adm && s.adm.toLowerCase().includes(sTerm)));
+                return match;
+            });
+
+            if(fil.length === 0) { cont.innerHTML = '<p class="text-gray-500 p-4 text-center font-medium">No students found.</p>'; return; }
+            
+            fil.sort((a, b) => a.name.localeCompare(b.name));
+
+            let html = `<table class="w-full text-sm text-left whitespace-nowrap"><thead class="table-header"><tr><th class="p-3">Adm.No</th><th class="p-3">Name</th><th class="p-3">Class & Gender</th><th class="p-3">Mobile</th><th class="p-3 text-right">Actions</th></tr></thead><tbody class="divide-y divide-gray-200">`;
+            fil.forEach(s => {
+                html += `<tr class="hover:bg-gray-50 bg-white"><td class="p-3 font-mono text-gray-500 font-medium">${s.adm || '-'}</td><td class="p-3 font-bold text-gray-900">${s.name}</td><td class="p-3 text-gray-600">${s.class} (${s.gender})</td><td class="p-3 text-gray-500">${s.mobile || '-'}</td><td class="p-3 text-right"><button class="edit-student-btn bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-md mr-2 font-semibold transition" data-id="${s.id}"><i class="fas fa-edit"></i> Edit</button><button class="delete-student-btn bg-red-50 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-md font-semibold transition" data-id="${s.id}"><i class="fas fa-trash"></i></button></td></tr>`;
+            });
+            cont.innerHTML = html + `</tbody></table>`;
+        };
+        document.getElementById('filter-manage-class').addEventListener('change', renderStudentList);
+        document.getElementById('filter-manage-gender').addEventListener('change', renderStudentList);
+        document.getElementById('search-student-input').addEventListener('input', renderStudentList);
+
+        document.getElementById('student-list-container').addEventListener('click', e => {
+            const delBtn = e.target.closest('.delete-student-btn'), editBtn = e.target.closest('.edit-student-btn');
+            if(delBtn) { if(confirm("Delete this student and all their payment history?")) { deleteDoc(doc(db, `${BASE_PATH}/students`, delBtn.dataset.id)); getDocs(query(collection(db, `${BASE_PATH}/payments`), where("studentId", "==", delBtn.dataset.id))).then(snap => { const batch = writeBatch(db); snap.forEach(d => batch.delete(d.ref)); batch.commit(); }); } }
+            if(editBtn) {
+                const st = students.find(s=>s.id === editBtn.dataset.id);
+                if(st) {
+                    editingStudentId = st.id; document.getElementById('e-stu-class').value = st.class||''; document.getElementById('e-stu-gender').value = st.gender||'Male'; document.getElementById('e-stu-name').value = st.name||''; document.getElementById('e-stu-adm').value = st.adm||''; document.getElementById('e-stu-mob').value = st.mobile||''; document.getElementById('e-stu-fat').value = st.father||''; document.getElementById('e-stu-uid').value = st.uid||''; document.getElementById('e-stu-addr').value = st.address||'';
+                    document.getElementById('edit-student-popup').classList.remove('hidden'); document.getElementById('edit-student-popup').classList.add('flex');
+                }
+            }
+        });
+        document.getElementById('edit-student-update').addEventListener('click', async () => {
+            await updateDoc(doc(db, `${BASE_PATH}/students`, editingStudentId), { name: document.getElementById('e-stu-name').value.toUpperCase().trim(), class: document.getElementById('e-stu-class').value.toUpperCase().trim(), gender: document.getElementById('e-stu-gender').value, adm: document.getElementById('e-stu-adm').value.toUpperCase().trim(), mobile: document.getElementById('e-stu-mob').value.trim(), father: document.getElementById('e-stu-fat').value.toUpperCase().trim(), uid: document.getElementById('e-stu-uid').value.trim(), address: document.getElementById('e-stu-addr').value.trim() });
+            document.getElementById('edit-student-popup').classList.add('hidden');
+        });
+        document.getElementById('edit-student-cancel').addEventListener('click', () => document.getElementById('edit-student-popup').classList.add('hidden'));
+
+        // --- 4. MANAGE CLASSES (Divide/Merge) ---
+        const renderClassList = () => {
+            const cont = document.getElementById('class-list-container');
+            if(classes.length === 0) { cont.innerHTML = '<p class="text-gray-500">No classes found.</p>'; return; }
+            cont.innerHTML = classes.map(c => `<div class="flex justify-between items-center bg-white shadow-sm border border-gray-200 p-4 rounded-xl"><span class="font-bold text-gray-800 text-lg">${c}</span><div><button class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg mr-2 edit-class-btn transition" data-class="${c}"><i class="fas fa-edit"></i></button><button class="bg-red-50 text-red-600 hover:bg-red-100 p-2 rounded-lg delete-class-btn transition" data-class="${c}"><i class="fas fa-trash"></i></button></div></div>`).join('');
+            
+            document.getElementById('move-from-class').innerHTML = `<option value="">-- Select --</option>` + classes.map(c=>`<option value="${c}">${c}</option>`).join('');
+            document.getElementById('move-target-sel').innerHTML = classes.map(c=>`<option value="${c}">${c}</option>`).join('');
+        };
+        document.getElementById('class-list-container').addEventListener('click', e => {
+            const editBtn = e.target.closest('.edit-class-btn'), delBtn = e.target.closest('.delete-class-btn');
+            if(editBtn) { editingClassName = editBtn.dataset.class; document.getElementById('edit-class-name').value = editingClassName; document.getElementById('edit-class-popup').classList.remove('hidden'); document.getElementById('edit-class-popup').classList.add('flex'); }
+            if(delBtn) {
+                const cName = delBtn.dataset.class;
+                if(confirm(`Delete class '${cName}' and ALL its students? This action is permanent!`)) {
+                    const toDelete = students.filter(s => s.class === cName).map(s => s.id); const batch = writeBatch(db);
+                    toDelete.forEach(id => batch.delete(doc(db, `${BASE_PATH}/students`, id))); batch.commit().then(() => alert('Class deleted.'));
+                }
+            }
+        });
+        document.getElementById('edit-class-cancel').addEventListener('click', () => document.getElementById('edit-class-popup').classList.add('hidden'));
+        document.getElementById('edit-class-update').addEventListener('click', async () => {
+            const newName = document.getElementById('edit-class-name').value.trim().toUpperCase();
+            if(newName && newName !== editingClassName) {
+                const batch = writeBatch(db); students.filter(s => s.class === editingClassName).forEach(s => { batch.update(doc(db, `${BASE_PATH}/students`, s.id), { class: newName }); });
+                await batch.commit(); document.getElementById('edit-class-popup').classList.add('hidden');
+            }
+        });
+
+        // Divide/Merge Logic
+        const moveListCont = document.getElementById('move-student-list-container'), moveBtn = document.getElementById('move-selected-students-btn'), tgtCont = document.getElementById('move-target-container');
+        document.getElementById('move-from-class').addEventListener('change', (e) => {
+            const cName = e.target.value; moveBtn.disabled = true;
+            if(!cName) { moveListCont.classList.add('hidden'); tgtCont.classList.add('hidden'); return; }
+            const inClass = students.filter(s => s.class === cName).sort((a,b)=>a.name.localeCompare(b.name)); 
+            moveListCont.classList.remove('hidden'); tgtCont.classList.remove('hidden');
+            if(inClass.length === 0) { moveListCont.innerHTML = '<p class="text-sm italic text-gray-500">No students in this class.</p>'; return; }
+            let h = `<div class="mb-3 pb-3 border-b border-gray-200"><input type="checkbox" id="move-all" class="mr-2 w-4 h-4 rounded"><label for="move-all" class="font-bold text-gray-800">Select All Students</label></div>`;
+            inClass.forEach(s => h += `<div class="flex items-center mb-2"><input type="checkbox" class="move-chk mr-3 w-4 h-4 rounded" value="${s.id}" id="m-${s.id}"><label for="m-${s.id}" class="text-sm font-medium text-gray-700">${s.name} <span class="text-xs text-gray-400 font-mono ml-2">(Adm: ${s.adm||'-'})</span></label></div>`);
+            moveListCont.innerHTML = h;
+        });
+        moveListCont.addEventListener('change', e => { if(e.target.id === 'move-all') document.querySelectorAll('.move-chk').forEach(c => c.checked = e.target.checked); moveBtn.disabled = document.querySelectorAll('.move-chk:checked').length === 0; });
+        
+        document.querySelectorAll('input[name="move_dest_type"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if(e.target.value === 'existing') { document.getElementById('move-target-sel').classList.remove('hidden'); document.getElementById('move-target-inp').classList.add('hidden'); }
+                else { document.getElementById('move-target-sel').classList.add('hidden'); document.getElementById('move-target-inp').classList.remove('hidden'); }
+            });
+        });
+
+        moveBtn.addEventListener('click', async () => {
+            const ids = Array.from(document.querySelectorAll('.move-chk:checked')).map(c=>c.value); 
+            const isNew = document.querySelector('input[name="move_dest_type"]:checked').value === 'new';
+            const targetClass = isNew ? document.getElementById('move-target-inp').value.trim().toUpperCase() : document.getElementById('move-target-sel').value;
+            
+            if(!targetClass) return alert("Please specify target class.");
+            if(!confirm(`Move ${ids.length} student(s) to ${targetClass}?`)) return;
+
+            const batch = writeBatch(db); ids.forEach(id => { batch.update(doc(db, `${BASE_PATH}/students`, id), { class: targetClass }); });
+            await batch.commit(); alert('Students moved successfully.'); document.getElementById('move-from-class').value = ''; moveListCont.classList.add('hidden'); tgtCont.classList.add('hidden');
+        });
+
+        // --- 5. GROUPS ---
+        const renderStudentGroups = () => {
+             document.getElementById('student-groups-list').innerHTML = studentGroups.length === 0 ? '<p class="text-gray-500 italic p-3">No groups created yet.</p>' : studentGroups.map((g, i) => `<div class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm flex justify-between items-center mb-3"><div class="flex flex-col"><span class="font-bold text-lg text-gray-800">Group ${i+1}</span><span class="text-gray-500 text-sm font-medium"><i class="fas fa-users mr-1"></i> ${g.memberIds.length} Linked Students ${g.fee > 0 ? `<span class="ml-2 text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-bold">₹${g.fee}/month</span>` : ''}</span></div><div><button class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-bold transition edit-grp mr-2" data-id="${g.id}"><i class="fas fa-edit"></i> Edit</button><button class="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg text-sm font-bold transition del-grp" data-id="${g.id}"><i class="fas fa-trash"></i></button></div></div>`).join('');
+        };
+        document.getElementById('student-groups-list').addEventListener('click', e => { 
+            const delBtn = e.target.closest('.del-grp'), editBtn = e.target.closest('.edit-grp');
+            if(delBtn && confirm("Delete this group?")) deleteDoc(doc(db, `${BASE_PATH}/studentGroups`, delBtn.dataset.id)); 
+            if(editBtn) {
+                const g = studentGroups.find(gr => gr.id === editBtn.dataset.id);
+                if(g) {
+                    document.getElementById('e-grp-id').value = g.id; document.getElementById('e-grp-fee').value = g.fee || '';
+                    document.getElementById('e-grp-members').innerHTML = g.memberIds.map(sid => { const s = students.find(st=>st.id===sid); return s ? `<div class="flex items-center"><input type="checkbox" class="rm-grp-mem mr-2 w-4 h-4" value="${sid}"> <span class="text-sm font-medium">${s.name} (${s.class})</span></div>` : ''; }).join('');
+                    document.getElementById('edit-group-popup').classList.remove('hidden'); document.getElementById('edit-group-popup').classList.add('flex');
+                }
+            }
+        });
+        document.getElementById('edit-group-cancel').onclick = () => document.getElementById('edit-group-popup').classList.add('hidden');
+        document.getElementById('edit-group-update').onclick = async () => {
+            const gid = document.getElementById('e-grp-id').value, gfee = parseFloat(document.getElementById('e-grp-fee').value) || 0;
+            const toRemove = Array.from(document.querySelectorAll('.rm-grp-mem:checked')).map(cb=>cb.value);
+            const g = studentGroups.find(gr=>gr.id===gid);
+            const newMem = g.memberIds.filter(id => !toRemove.includes(id));
+            if(newMem.length < 2 && newMem.length > 0) return alert("Group must have at least 2 members. Add more or delete group.");
+            if(newMem.length === 0) { await deleteDoc(doc(db, `${BASE_PATH}/studentGroups`, gid)); } 
+            else { await updateDoc(doc(db, `${BASE_PATH}/studentGroups`, gid), { fee: gfee, memberIds: newMem }); }
+            document.getElementById('edit-group-popup').classList.add('hidden');
+        };
+        
+        document.getElementById('num-of-students-group').addEventListener('input', e => {
+            const count = parseInt(e.target.value) || 0; const cont = document.getElementById('group-creation-container'); cont.innerHTML = '';
+            document.getElementById('create-group-btn-container').classList.toggle('hidden', count < 2);
+            if(count < 2) return;
+            const clsOpts = `<option value="">Select Class</option>` + classes.map(c=>`<option value="${c}">${c}</option>`).join('');
+            for(let i=0; i<count; i++) {
+                cont.innerHTML += `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pb-4 border-b border-gray-100 mb-2"><select class="grp-cls p-2.5 border rounded-lg bg-gray-50 text-sm font-semibold" data-idx="${i}">${clsOpts}</select><select class="grp-gen p-2.5 border rounded-lg bg-gray-50 text-sm font-semibold" data-idx="${i}"><option value="Male">Male</option><option value="Female">Female</option></select><select id="grp-stu-${i}" class="grp-stu p-2.5 border rounded-lg text-sm font-semibold sm:col-span-3 bg-white"><option value="">Select Student...</option></select></div>`;
+            }
+        });
+        document.getElementById('group-creation-container').addEventListener('change', e => {
+            if(e.target.classList.contains('grp-cls') || e.target.classList.contains('grp-gen')) {
+                const idx = e.target.dataset.idx, cls = document.querySelector(`.grp-cls[data-idx="${idx}"]`).value, gen = document.querySelector(`.grp-gen[data-idx="${idx}"]`).value;
+                if(cls && gen) {
+                    const stuList = students.filter(s => s.class === cls && s.gender === gen).sort((a,b)=>(a.name||'').localeCompare(b.name));
+                    document.getElementById(`grp-stu-${idx}`).innerHTML = '<option value="">Select Student...</option>' + stuList.map(s=>`<option value="${s.id}">${s.name} (Adm: ${s.adm||'-'})</option>`).join('');
+                }
+            }
+        });
+        document.getElementById('create-group-btn').addEventListener('click', async () => {
+            const selects = Array.from(document.querySelectorAll('.grp-stu')).map(s=>s.value).filter(Boolean);
+            const fee = parseFloat(document.getElementById('group-monthly-fee').value) || 0;
+            if(selects.length < 2 || new Set(selects).size !== selects.length) return alert("Please select unique valid students.");
+            await addDoc(collection(db, `${BASE_PATH}/studentGroups`), { memberIds: selects, fee: fee });
+            alert("Group Created Successfully!"); document.getElementById('num-of-students-group').value = ''; document.getElementById('group-monthly-fee').value = ''; document.getElementById('group-creation-container').innerHTML = ''; document.getElementById('create-group-btn-container').classList.add('hidden');
+        });
+
+        // --- 6. FEE CONCESSIONS ---
+        const renderConcessionsList = () => {
+            const fCls = document.getElementById('filter-conc-class').value;
+            const sTerm = document.getElementById('search-conc-input').value.toLowerCase();
+            const cont = document.getElementById('conc-list-container'), emptyState = document.getElementById('conc-list-empty');
+            const actCont = document.getElementById('active-concessions-list');
+
+            const withConc = students.filter(s => s.concessionFee !== undefined && s.concessionFee !== null);
+            actCont.innerHTML = withConc.length ? withConc.map(s => `<div class="bg-white p-3 rounded-lg shadow-sm border border-green-200 flex justify-between items-center"><div class="truncate"><div class="font-bold text-sm truncate text-gray-800">${s.name}</div><div class="text-xs text-gray-500">${s.class}</div></div><div class="bg-green-100 text-green-800 font-bold px-2 py-1 rounded text-sm cursor-pointer hover:bg-green-200 border border-green-300" onclick="openConcModal('${s.id}')">₹${s.concessionFee}</div></div>`).join('') : '<p class="text-sm text-gray-500 col-span-full italic">No active concessions.</p>';
+
+            if(!fCls && !sTerm) { emptyState.classList.remove('hidden'); cont.classList.add('hidden'); return; }
+            emptyState.classList.add('hidden'); cont.classList.remove('hidden');
+            
+            const fil = students.filter(s => { let match = true; if(fCls) match = match && s.class === fCls; if(sTerm) match = match && (s.name.toLowerCase().includes(sTerm) || (s.adm && s.adm.toLowerCase().includes(sTerm))); return match; });
+
+            if(fil.length === 0) { cont.innerHTML = '<p class="text-gray-500 p-2">No students found.</p>'; return; }
+            cont.innerHTML = fil.map(s => `<div class="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-lg shadow-sm"><div class="font-medium text-gray-800">${s.name} <span class="text-xs text-gray-500 ml-2">${s.class} (Adm: ${s.adm||'-'})</span></div><button onclick="openConcModal('${s.id}')" class="${s.concessionFee!==undefined?'bg-green-50 text-green-700':'bg-blue-50 text-blue-700'} font-bold px-4 py-1.5 rounded-lg text-sm transition hover:shadow-md">${s.concessionFee!==undefined?`Concession: ₹${s.concessionFee}`:'Set Concession'}</button></div>`).join('');
+        };
+        document.getElementById('filter-conc-class').addEventListener('change', renderConcessionsList);
+        document.getElementById('search-conc-input').addEventListener('input', renderConcessionsList);
+
+        window.openConcModal = (id) => {
+            const s = students.find(st=>st.id===id); if(!s) return;
+            document.getElementById('conc-student-id').value = s.id;
+            document.getElementById('conc-student-name').textContent = `${s.name} (${s.class})`;
+            document.getElementById('conc-fee-amount').value = s.concessionFee !== undefined ? s.concessionFee : '';
+            document.getElementById('conc-remove').classList.toggle('hidden', s.concessionFee === undefined);
+            document.getElementById('concession-popup').classList.remove('hidden'); document.getElementById('concession-popup').classList.add('flex');
+        };
+        document.getElementById('conc-cancel').onclick = () => document.getElementById('concession-popup').classList.add('hidden');
+        document.getElementById('conc-save').onclick = async () => {
+            const amt = parseFloat(document.getElementById('conc-fee-amount').value);
+            if(isNaN(amt) || amt < 0) return alert("Enter valid amount");
+            await updateDoc(doc(db, `${BASE_PATH}/students`, document.getElementById('conc-student-id').value), { concessionFee: amt });
+            document.getElementById('concession-popup').classList.add('hidden');
+        };
+        document.getElementById('conc-remove').onclick = async () => {
+            await updateDoc(doc(db, `${BASE_PATH}/students`, document.getElementById('conc-student-id').value), { concessionFee: null }); 
+            document.getElementById('concession-popup').classList.add('hidden');
+        };
+
+        // --- 7. ADVANCED FEE ENGINE ---
+        document.getElementById('adv-fee-scope').addEventListener('change', (e) => {
+            const val = e.target.value;
+            document.getElementById('scope-global-container').classList.toggle('hidden', val !== 'global');
+            document.getElementById('scope-class-wise-container').classList.toggle('hidden', val !== 'class-wise');
+            document.getElementById('scope-specific-container').classList.toggle('hidden', val !== 'specific');
+            if(val === 'class-wise') document.getElementById('class-wise-inputs').innerHTML = classes.map(c => `<div><label class="block text-xs font-bold text-gray-600 mb-1">${c}</label><input type="number" data-class="${c}" class="cw-input w-full p-2 border rounded text-sm font-medium" placeholder="₹"></div>`).join('');
+            if(val === 'specific') document.getElementById('adv-fee-specific-class').innerHTML = classes.map(c => `<option value="${c}">${c}</option>`).join('');
+        });
+
+        document.getElementById('add-adv-fee-btn').addEventListener('click', () => {
+            const name = document.getElementById('adv-fee-name').value.trim(), scope = document.getElementById('adv-fee-scope').value, isMandatory = document.getElementById('adv-fee-receipt-req').checked;
+            if(!name) return alert("Fee Item Name is mandatory.");
+            let feeData = { key: `custom-${Date.now()}`, name: name, type: 'custom', isVisible: true, scope: scope, isReceiptMandatory: isMandatory };
+
+            if(scope === 'global') {
+                const amt = parseFloat(document.getElementById('adv-fee-global-amt').value); if(isNaN(amt)) return alert("Enter valid global amount"); feeData.amount = amt;
+            } else if(scope === 'class-wise') {
+                let classAmounts = {}; document.querySelectorAll('.cw-input').forEach(inp => { const amt = parseFloat(inp.value); if(!isNaN(amt)) classAmounts[inp.dataset.class] = amt; });
+                if(Object.keys(classAmounts).length === 0) return alert("Enter amount for at least one class"); feeData.classValues = classAmounts;
+            } else if(scope === 'specific') {
+                const targetCls = document.getElementById('adv-fee-specific-class').value, amt = parseFloat(document.getElementById('adv-fee-specific-amt').value);
+                if(!targetCls || isNaN(amt)) return alert("Select class and enter valid amount"); feeData.targetClass = targetCls; feeData.amount = amt;
+            }
+            setDoc(doc(db, `${BASE_PATH}/settings`, 'config'), {feeItems: [...feeItems, feeData]}, {merge:true});
+            document.getElementById('adv-fee-name').value = ''; document.getElementById('adv-fee-global-amt').value = ''; alert("Advanced Fee Created!");
+        });
+
+        document.getElementById('save-fee-config-btn').addEventListener('click', async () => {
+            await setDoc(doc(db, `${BASE_PATH}/settings`, 'config'), { 
+                defaultFee: parseInt(document.getElementById('default-fee-input').value), 
+                feeStatusTitle: document.getElementById('fee-status-title-input').value,
+                defaultReceiptMandatory: document.getElementById('default-fee-receipt-req').checked
+            }, {merge: true});
+            alert("Fee Configuration Saved!");
+        });
+
+        const renderFeeItemsManagement = () => {
+            const cont = document.getElementById('fee-items-management-container');
+            cont.innerHTML = feeItems.map(item => {
+                let detailsHtml = '';
+                if(item.type === 'custom') detailsHtml = `<div class="text-xs text-gray-500 mt-1">Scope: <span class="font-semibold text-blue-600 uppercase">${item.scope || 'GLOBAL'}</span> | Receipt Mandatory: <span class="font-semibold ${item.isReceiptMandatory ? 'text-red-500':'text-gray-400'}">${item.isReceiptMandatory ? 'YES':'NO'}</span></div>`;
+                return `<div class="flex items-center bg-white border border-gray-200 p-4 rounded-xl shadow-sm drag-item transition hover:shadow-md" data-key="${item.key}"><span class="drag-handle mr-4 text-gray-400 text-lg"><i class="fas fa-grip-lines"></i></span><div class="flex-grow"><span class="font-bold text-gray-800 text-lg">${item.name}</span>${detailsHtml}</div>${item.type==='custom' ? `<button class="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-sm font-bold transition edit-fee mr-2" data-key="${item.key}"><i class="fas fa-edit"></i> Edit</button><button class="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg text-sm font-bold transition del-fee" data-key="${item.key}"><i class="fas fa-trash"></i></button>` : `<span class="px-3 py-1 bg-gray-100 text-gray-500 rounded-lg text-xs font-bold uppercase tracking-wider">Default Month</span>`}</div>`;
+            }).join('');
+            if(cont.sortable) cont.sortable.destroy();
+            cont.sortable = new Sortable(cont, { handle: '.drag-handle', animation: 150, ghostClass: 'sortable-ghost', onEnd: () => setDoc(doc(db, `${BASE_PATH}/settings`, 'config'), {feeItems: Array.from(cont.querySelectorAll('.drag-item')).map(el => feeItems.find(fi => fi.key === el.dataset.key)).filter(Boolean)}, {merge:true}) });
+        };
+        
+        document.getElementById('fee-items-management-container').addEventListener('click', e => { 
+            const delBtn = e.target.closest('.del-fee'), editBtn = e.target.closest('.edit-fee');
+            if(delBtn && confirm("Delete this fee item?")) setDoc(doc(db, `${BASE_PATH}/settings`, 'config'), {feeItems: feeItems.filter(i => i.key !== delBtn.dataset.key)}, {merge:true}); 
+            if(editBtn) {
+                const item = feeItems.find(i => i.key === editBtn.dataset.key); if(!item) return;
+                document.getElementById('e-fee-key').value = item.key; document.getElementById('e-fee-name').value = item.name;
+                document.getElementById('e-fee-scope').value = item.scope || 'global';
+                document.getElementById('e-fee-receipt-req').checked = item.isReceiptMandatory || false;
+                
+                document.getElementById('e-scope-global-container').classList.add('hidden'); document.getElementById('e-scope-class-wise-container').classList.add('hidden'); document.getElementById('e-scope-specific-container').classList.add('hidden');
+                
+                if(item.scope === 'global' || !item.scope) {
+                    document.getElementById('e-scope-global-container').classList.remove('hidden'); document.getElementById('e-fee-global-amt').value = item.amount || '';
+                } else if(item.scope === 'class-wise') {
+                    document.getElementById('e-scope-class-wise-container').classList.remove('hidden');
+                    document.getElementById('e-class-wise-inputs').innerHTML = classes.map(c => `<div><label class="block text-xs font-bold text-gray-600 mb-1">${c}</label><input type="number" data-class="${c}" class="e-cw-input w-full p-2 border rounded text-sm font-medium" value="${item.classValues && item.classValues[c] ? item.classValues[c] : ''}"></div>`).join('');
+                } else if(item.scope === 'specific') {
+                    document.getElementById('e-scope-specific-container').classList.remove('hidden');
+                    document.getElementById('e-fee-specific-class').innerHTML = classes.map(c => `<option value="${c}" ${item.targetClass===c?'selected':''}>${c}</option>`).join('');
+                    document.getElementById('e-fee-specific-amt').value = item.amount || '';
+                }
+                document.getElementById('edit-fee-popup').classList.remove('hidden'); document.getElementById('edit-fee-popup').classList.add('flex');
+            }
+        });
+
+        document.getElementById('e-fee-scope').addEventListener('change', (e) => {
+            const val = e.target.value;
+            document.getElementById('e-scope-global-container').classList.toggle('hidden', val !== 'global');
+            document.getElementById('e-scope-class-wise-container').classList.toggle('hidden', val !== 'class-wise');
+            document.getElementById('e-scope-specific-container').classList.toggle('hidden', val !== 'specific');
+            if(val === 'class-wise') document.getElementById('e-class-wise-inputs').innerHTML = classes.map(c => `<div><label class="block text-xs font-bold text-gray-600 mb-1">${c}</label><input type="number" data-class="${c}" class="e-cw-input w-full p-2 border rounded text-sm font-medium"></div>`).join('');
+            if(val === 'specific') document.getElementById('e-fee-specific-class').innerHTML = classes.map(c => `<option value="${c}">${c}</option>`).join('');
+        });
+
+        document.getElementById('e-fee-cancel').onclick = () => document.getElementById('edit-fee-popup').classList.add('hidden');
+        document.getElementById('e-fee-update').onclick = () => {
+            const key = document.getElementById('e-fee-key').value, name = document.getElementById('e-fee-name').value.trim(), scope = document.getElementById('e-fee-scope').value;
+            if(!name) return alert("Name is mandatory.");
+            let updatedFee = { key, name, type: 'custom', isVisible: true, scope, isReceiptMandatory: document.getElementById('e-fee-receipt-req').checked };
+            
+            if(scope === 'global') {
+                const amt = parseFloat(document.getElementById('e-fee-global-amt').value); if(isNaN(amt)) return alert("Enter valid amount"); updatedFee.amount = amt;
+            } else if(scope === 'class-wise') {
+                let classAmounts = {}; document.querySelectorAll('.e-cw-input').forEach(inp => { const amt = parseFloat(inp.value); if(!isNaN(amt)) classAmounts[inp.dataset.class] = amt; });
+                if(Object.keys(classAmounts).length === 0) return alert("Enter amount for at least one class"); updatedFee.classValues = classAmounts;
+            } else if(scope === 'specific') {
+                const targetCls = document.getElementById('e-fee-specific-class').value, amt = parseFloat(document.getElementById('e-fee-specific-amt').value);
+                if(!targetCls || isNaN(amt)) return alert("Select class and enter valid amount"); updatedFee.targetClass = targetCls; updatedFee.amount = amt;
+            }
+            
+            const newFees = feeItems.map(f => f.key === key ? updatedFee : f);
+            setDoc(doc(db, `${BASE_PATH}/settings`, 'config'), {feeItems: newFees}, {merge:true});
+            document.getElementById('edit-fee-popup').classList.add('hidden');
+        };
+
+        // --- 8. WEBSITE SETTINGS ---
+        document.getElementById('save-web-info-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('save-web-info-btn'); btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Saving...'; btn.disabled = true;
+            await setDoc(doc(db, `${BASE_PATH}/settings`, 'config'), {
+                appName: document.getElementById('app-name-input').value, appSubtitle: document.getElementById('app-subtitle-input').value,
+                logoUrl: document.getElementById('web-logo').value, contactPhone: document.getElementById('web-phone').value,
+                contactEmail: document.getElementById('web-email').value, socialWhatsapp: document.getElementById('web-wa').value,
+                socialFacebook: document.getElementById('web-fb').value, socialInstagram: document.getElementById('web-ig').value,
+                socialTelegram: document.getElementById('web-tg').value, socialYouTube: document.getElementById('web-yt').value,
+                regNo: document.getElementById('web-regno').value.trim(), place: document.getElementById('web-place').value.trim()
+            }, {merge: true});
+            await setDoc(doc(db, `${BASE_PATH}/settings`, 'content'), { description: document.getElementById('web-about').value }, {merge: true});
+            btn.innerHTML = '<i class="fas fa-save mr-2"></i> Save All Basic Info'; btn.disabled = false; alert("Basic Info Updated!");
+        });
+
+        const updateWebContent = async () => { await setDoc(doc(db, `${BASE_PATH}/settings`, 'content'), webContent, {merge: true}); }
+        
+        // Notices & Gallery (With Edit options)
+        const renderWebNotices = () => { document.getElementById('web-notices-list').innerHTML = webContent.notices.length === 0 ? '<p class="text-sm italic text-gray-500 p-2">No active notices.</p>' : webContent.notices.map((n, i) => `<div class="flex justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm text-sm items-center transition hover:shadow-md"><span class="text-gray-800 font-medium"><span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-bold mr-3 font-mono">${n.date}</span> ${n.text}</span> <div><button class="text-blue-500 bg-blue-50 hover:bg-blue-100 w-8 h-8 rounded-lg flex items-center justify-center transition inline-flex mr-2" onclick="editNotice(${i})"><i class="fas fa-edit"></i></button><button class="text-red-500 bg-red-50 hover:bg-red-100 w-8 h-8 rounded-lg flex items-center justify-center transition inline-flex" onclick="deleteNotice(${i})"><i class="fas fa-trash"></i></button></div></div>`).join(''); };
+        document.getElementById('add-notice-btn').onclick = () => { const txt = document.getElementById('new-notice-txt').value, dt = document.getElementById('new-notice-dt').value; if(txt && dt) { webContent.notices.push({text: txt, date: dt}); updateWebContent(); document.getElementById('new-notice-txt').value=''; } };
+        window.deleteNotice = (idx) => { webContent.notices.splice(idx, 1); updateWebContent(); };
+        window.editNotice = (idx) => {
+            const n = webContent.notices[idx]; document.getElementById('e-not-idx').value = idx;
+            document.getElementById('e-not-txt').value = n.text; document.getElementById('e-not-dt').value = n.date;
+            document.getElementById('edit-notice-popup').classList.remove('hidden'); document.getElementById('edit-notice-popup').classList.add('flex');
+        };
+        document.getElementById('e-not-cancel').onclick = () => document.getElementById('edit-notice-popup').classList.add('hidden');
+        document.getElementById('e-not-save').onclick = () => {
+            const idx = document.getElementById('e-not-idx').value, txt = document.getElementById('e-not-txt').value, dt = document.getElementById('e-not-dt').value;
+            if(txt && dt) { webContent.notices[idx] = {text: txt, date: dt}; updateWebContent(); document.getElementById('edit-notice-popup').classList.add('hidden'); }
+        };
+
+        const renderWebGallery = () => { document.getElementById('web-gallery-list').innerHTML = webContent.gallery.length === 0 ? '<p class="col-span-full text-sm italic text-gray-500 p-2">Gallery is empty.</p>' : webContent.gallery.map((url, i) => `<div class="relative group rounded-xl overflow-hidden shadow-sm border border-gray-200"><img src="${url}" class="w-full h-32 object-cover transition transform group-hover:scale-110"><div class="absolute inset-0 bg-black bg-opacity-40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center"><button class="bg-blue-500 hover:bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition transform hover:scale-110 mr-2" onclick="editGal(${i})"><i class="fas fa-edit"></i></button><button class="bg-red-500 hover:bg-red-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg transition transform hover:scale-110" onclick="deleteGal(${i})"><i class="fas fa-trash"></i></button></div></div>`).join(''); };
+        document.getElementById('add-gal-btn').onclick = () => { const url = document.getElementById('new-gal-url').value; if(url) { webContent.gallery.push(url); updateWebContent(); document.getElementById('new-gal-url').value=''; } };
+        window.deleteGal = (idx) => { webContent.gallery.splice(idx, 1); updateWebContent(); };
+        window.editGal = (idx) => { const newUrl = prompt("Edit Image URL:", webContent.gallery[idx]); if(newUrl && newUrl.trim()) { webContent.gallery[idx] = newUrl.trim(); updateWebContent(); } };
+
+        // --- SECURITY SETTINGS ---
+        document.getElementById('save-admin-auth-btn').addEventListener('click', async () => {
+            const email = document.getElementById('admin-email-input').value.trim();
+            if(!email) return alert("Email cannot be empty.");
+            await setDoc(doc(db, `${BASE_PATH}/settings`, 'adminAuth'), { email: email }, {merge: true});
+            alert("Admin Security Settings Updated Successfully!");
+        });
+
+        // --- DB INIT & FIREBASE SYNC ---
+        async function setupDefaultData() {
+            const def = [ { key:'jan',name:'January',type:'month',isVisible:true }, { key:'feb',name:'February',type:'month',isVisible:true }, { key:'mar',name:'March',type:'month',isVisible:true }, { key:'apr',name:'April',type:'month',isVisible:true }, { key:'may',name:'May',type:'month',isVisible:true }, { key:'jun',name:'June',type:'month',isVisible:true }, { key:'jul',name:'July',type:'month',isVisible:true }, { key:'aug',name:'August',type:'month',isVisible:true }, { key:'sep',name:'September',type:'month',isVisible:true }, { key:'oct',name:'October',type:'month',isVisible:true }, { key:'nov',name:'November',type:'month',isVisible:true }, { key:'dec',name:'December',type:'month',isVisible:true } ];
+            await setDoc(doc(db, `${BASE_PATH}/settings`, 'config'), { appName: 'Fee Tracker Pro', defaultFee: 200, nextReceiptNo: 1, feeItems: def }, { merge: true });
+        }
+
+        async function setupDefaultAdmin() {
+            const adminRef = doc(db, `${BASE_PATH}/settings`, 'adminAuth');
+            const snap = await getDoc(adminRef);
+            if (!snap.exists()) { await setDoc(adminRef, { email: 'admin@institute.com' }); } 
+            else { document.getElementById('admin-email-input').value = snap.data().email || ''; }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            // Guarded by guardAdmin() above — this is just for data loading
+            if (!user) return;
+
+            await setupDefaultAdmin(); 
+            const configRef = doc(db, `${BASE_PATH}/settings`, 'config');
+            const snap = await getDoc(configRef);
+            
+            if (!snap.exists()) { await setupDefaultData(); } 
+            else if (!snap.data().feeItems || snap.data().feeItems.length === 0) {
+                const def = [ { key:'jan',name:'January',type:'month',isVisible:true }, { key:'feb',name:'February',type:'month',isVisible:true }, { key:'mar',name:'March',type:'month',isVisible:true }, { key:'apr',name:'April',type:'month',isVisible:true }, { key:'may',name:'May',type:'month',isVisible:true }, { key:'jun',name:'June',type:'month',isVisible:true }, { key:'jul',name:'July',type:'month',isVisible:true }, { key:'aug',name:'August',type:'month',isVisible:true }, { key:'sep',name:'September',type:'month',isVisible:true }, { key:'oct',name:'October',type:'month',isVisible:true }, { key:'nov',name:'November',type:'month',isVisible:true }, { key:'dec',name:'December',type:'month',isVisible:true } ];
+                await setDoc(configRef, { feeItems: def }, { merge: true });
+            }
+
+            onSnapshot(configRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const d = docSnap.data();
+                    document.getElementById('app-name-header').textContent = d.appName || 'Admin Dashboard';
+                    
+                    document.getElementById('app-name-input').value = d.appName || ''; document.getElementById('app-subtitle-input').value = d.appSubtitle || '';
+                    document.getElementById('web-logo').value = d.logoUrl || ''; document.getElementById('web-phone').value = d.contactPhone || '';
+                    document.getElementById('web-email').value = d.contactEmail || ''; document.getElementById('web-wa').value = d.socialWhatsapp || '';
+                    document.getElementById('web-fb').value = d.socialFacebook || ''; document.getElementById('web-ig').value = d.socialInstagram || '';
+                    document.getElementById('web-tg').value = d.socialTelegram || ''; document.getElementById('web-yt').value = d.socialYouTube || '';
+                    document.getElementById('web-regno').value = d.regNo || ''; document.getElementById('web-place').value = d.place || '';
+                    
+                    document.getElementById('default-fee-input').value = d.defaultFee || 200; document.getElementById('fee-status-title-input').value = d.feeStatusTitle || '';
+                    document.getElementById('default-fee-receipt-req').checked = d.defaultReceiptMandatory || false;
+                    
+                    feeItems = d.feeItems || [];
+                    if(!document.getElementById('fee-settings-page').classList.contains('hidden')) renderFeeItemsManagement();
+                }
+            });
+
+            onSnapshot(doc(db, `${BASE_PATH}/settings`, 'content'), (snap) => {
+                webContent = snap.exists() ? Object.assign({ notices: [], gallery: [] }, snap.data()) : { notices: [], gallery: [] };
+                document.getElementById('web-about').value = webContent.description || '';
+                renderWebNotices(); renderWebGallery();
+            });
+
+            onSnapshot(collection(db, `${BASE_PATH}/staff`), (snap) => {
+                allStaff = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                if(!document.getElementById('manage-staff-page').classList.contains('hidden')) renderStaffList();
+            });
+
+            onSnapshot(collection(db, `${BASE_PATH}/students`), (snap) => {
+                students = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                if(!document.getElementById('manage-classes-page').classList.contains('hidden')) renderClassList();
+                if(!document.getElementById('manage-students-page').classList.contains('hidden')) renderStudentList();
+                if(!document.getElementById('fee-concessions-page').classList.contains('hidden')) renderConcessionsList();
+            });
+            
+            onSnapshot(collection(db, `${BASE_PATH}/studentGroups`), (snap) => {
+                studentGroups = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                if(!document.getElementById('manage-groups-page').classList.contains('hidden')) renderStudentGroups();
+            });
+        });
+
+    </script>
+</body>
+</html>
