@@ -5,14 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Student Dashboard - Fee Tracker</title>
     
-    <!-- Security: verified by auth-guard.js below -->
+    <!-- Security: Firebase anonymous auth + localStorage student ID check below -->
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     <link rel="apple-touch-icon" href="logo.png">
 
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/shared.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -229,11 +228,39 @@
         <div class="powered">Developed by <a href="https://www.instagram.com/muhammed_sanjide_p" target="_blank">HADI MAHIRI FAIZY</a></div>
     </footer>
 
-    <script type="module">
-        import { initHamburger, initTabs, fitText } from './js/shared.js';
+    <script>
+        // Hamburger Menu Logic with 'X' Animation
+        const mobileToggle = document.getElementById('mobile-menu-btn');
+        const navMenu = document.querySelector('.nav-menu');
+
+        mobileToggle.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            navMenu.classList.toggle('active'); 
+            mobileToggle.classList.toggle('active-toggle');
+        });
+
+        document.addEventListener('click', (e) => { 
+            if (!navMenu.contains(e.target) && !mobileToggle.contains(e.target)) { 
+                navMenu.classList.remove('active'); 
+                mobileToggle.classList.remove('active-toggle');
+            } 
+        });
+
+        const links = document.querySelectorAll('.tab-link');
+        const pages = document.querySelectorAll('.page-content');
         
-        // Hamburger & tabs — no more duplicate code
-        initTabs();
+        links.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                links.forEach(l => l.classList.remove('active')); link.classList.add('active');
+                pages.forEach(p => p.classList.add('hidden'));
+                document.getElementById(link.getAttribute('data-target')).classList.remove('hidden');
+                
+                navMenu.classList.remove('active'); 
+                mobileToggle.classList.remove('active-toggle');
+                window.scrollTo(0,0);
+            });
+        });
 
         // Inline Accordion Expansion (No Popup)
         window.toggleReceipt = (element) => {
@@ -249,7 +276,20 @@
             localStorage.removeItem('student_logged_in_id');
             window.location.href = 'index.html';
         }
-        window.logoutStudent = logoutStudent;
+
+        function fitText(elementId) {
+            const el = document.getElementById(elementId);
+            if(!el) return;
+            const parent = el.parentElement;
+            el.style.fontSize = ''; 
+            let fontSize = parseInt(window.getComputedStyle(el).fontSize);
+            el.style.whiteSpace = 'nowrap';
+            while (el.scrollWidth > parent.clientWidth && fontSize > 12) {
+                fontSize -= 1;
+                el.style.fontSize = fontSize + 'px';
+            }
+        }
+        window.addEventListener('resize', () => { fitText('header-title'); });
     </script>
 
     <!-- Firebase Integration -->
@@ -257,13 +297,9 @@
         import { signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { db, auth, BASE_PATH } from './js/firebase-config.js';
-        import { guardStudent }         from './js/auth-guard.js';
-        import { loadHeader, loadFooter } from './js/shared.js';
 
-        // BASE_PATH from firebase-config.js
-        // 🔐 Student verification via auth-guard
-        const studentId = await guardStudent();
-        if (!studentId) return;
+        // BASE_PATH imported from js/firebase-config.js
+        const studentId = localStorage.getItem('student_logged_in_id');
         let feeItems = [], allPayments = [], studentGroups = [];
         let defaultFee = 200;
 
@@ -272,13 +308,43 @@
                 onSnapshot(doc(db, `${BASE_PATH}/settings`, 'config'), snap => {
                     const conf = snap.exists() ? snap.data() : {};
                     
-                    // 🔄 shared.js handles header/footer — no duplication
-                    loadHeader(conf);
-                    loadFooter(conf);
+                    document.getElementById('header-title').textContent = conf.appName || 'Student Dashboard';
+                    setTimeout(() => { fitText('header-title'); }, 50);
+
                     document.getElementById('id-school-name').textContent = conf.appName || 'Institution Name';
                     document.getElementById('id-school-sub').textContent = conf.appSubtitle || 'Excellence in Education';
+                    document.getElementById('footer-inst-name').textContent = conf.appName || 'Institution Name';
                     defaultFee = conf.defaultFee || 200;
                     feeItems = conf.feeItems || [];
+                    
+                    const regEl = document.getElementById('header-regno');
+                    const placeEl = document.getElementById('header-place');
+                    const sepEl = document.getElementById('header-sep');
+                    const subContainer = document.getElementById('header-subtitle');
+                    
+                    regEl.textContent = conf.regNo ? `Reg: ${conf.regNo}` : '';
+                    placeEl.textContent = conf.place || '';
+                    if(conf.regNo || conf.place) {
+                        subContainer.classList.remove('hidden');
+                        if(conf.regNo && conf.place) sepEl.classList.remove('hidden'); else sepEl.classList.add('hidden');
+                    } else { subContainer.classList.add('hidden'); }
+
+                    if(conf.logoUrl) {
+                        document.getElementById('header-logo').src = conf.logoUrl;
+                        document.getElementById('header-logo').style.opacity = '1';
+                    }
+                    
+                    document.getElementById('footer-phone').textContent = conf.contactPhone || 'Not Available';
+                    if(conf.contactPhone) document.getElementById('footer-phone-link').href = `tel:${conf.contactPhone}`;
+                    document.getElementById('footer-email').textContent = conf.contactEmail || 'Not Available';
+                    if(conf.contactEmail) document.getElementById('footer-email-link').href = `mailto:${conf.contactEmail}`;
+
+                    ['youtube','telegram','instagram','whatsapp','facebook'].forEach(k => {
+                        const el = document.getElementById(`link-${k}`);
+                        const url = k === 'youtube' ? conf.socialYouTube : conf['social' + k.charAt(0).toUpperCase() + k.slice(1)];
+                        if(url) { el.href = url; el.classList.remove('hidden'); }
+                        else el.classList.add('hidden');
+                    });
                 });
 
                 const grpSnap = await getDocs(collection(db, `${BASE_PATH}/studentGroups`));
